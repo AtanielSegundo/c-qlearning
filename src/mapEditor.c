@@ -17,11 +17,14 @@
 #define MAZE_RENDER_IMPLEMENTATION
 #include "mazeRender.h"
 
+#include "mazeGeneration.h"
+
 #define MAZE_IR_IMPLEMENTATION
 #include "mazeIR.h"
 
 #define UI_IMPLEMENTATION
 #include "UI.h"
+
 
 #define WINDOW_WIDTH  1280U
 #define WINDOW_HEIGTH  720U
@@ -38,8 +41,8 @@ int main(int argc, char** argv) {
 
 	// RAYLIB STARTUP STUFF
 	SetTraceLogLevel(LOG_WARNING); 
-	    
-	MazeInternalRepr ir  = {0};
+	
+	MazeInternalRepr ir  = generateMaze(10,10);
 	MazeRenderCtx render = {0};
 
 	MazeRenderCtxInit(&render);

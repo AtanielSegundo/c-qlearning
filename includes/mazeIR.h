@@ -30,6 +30,7 @@ typedef struct
 
 uint8_t getCell(MazeInternalRepr* m,size_t i, size_t j);
 void setCell(MazeInternalRepr* m,size_t i, size_t j, GridCellType t);
+inline MazeInternalRepr newOpenMaze(size_t rows, size_t cols);
 
 #endif
 
