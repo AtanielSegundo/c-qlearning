@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+		"raylib.h": "c",
+		"cstdint": "c",
+		"windows.h": "c",
+		"winnls.h": "c",
+		"mazeir.h": "c",
+		"gui_window_file_dialog.h": "c"
+	}
+}
