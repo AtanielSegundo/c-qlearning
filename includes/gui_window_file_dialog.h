@@ -362,8 +362,8 @@ void GuiWindowFileDialog(GuiWindowFileDialogState *state)
         {
             if(state->saveFileMode){
 				strcpy(state->fileNameTextCopy, state->fileNameText);
-				strcpy(state->fileNameText, GetFileName(state->dirFiles.paths[state->filesListActive]));
 			}
+			strcpy(state->fileNameText, GetFileName(state->dirFiles.paths[state->filesListActive]));
 
             if (DirectoryExists(TextFormat("%s/%s", state->dirPathText, state->fileNameText)))
             {
