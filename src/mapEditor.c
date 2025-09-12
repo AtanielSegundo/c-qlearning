@@ -32,7 +32,7 @@
 int main(int argc, char** argv) {	
 	// ARGUMENT HANDLING
 	
-	char maze_path[512] = {0};
+	char maze_path[512] = "random.maze";
 	char save_path[512] = {0};
 	
 	// Popup de confirmação de salvamento
@@ -54,10 +54,34 @@ int main(int argc, char** argv) {
 	setCustomStyle();
 
 	GuiWindowFileDialogState fDialogCtx = InitGuiWindowFileDialog(GetWorkingDirectory());
+	GenerateFormState genMazeFormCtx = initGenerateFormState("random.maze",10,10);
 
+	bool lockMazeEditing   = false;
+	
     while (!WindowShouldClose())
     {
 		// UPDATE LOGIC SHOULD GO HERE
+
+		if (genMazeFormCtx.createPressed){
+			genMazeFormCtx.createPressed = false;
+			// TESTING THE PASSED PARAMETERS
+			int rows = atoi(genMazeFormCtx.rowsText);
+			int cols = atoi(genMazeFormCtx.colsText);
+			if (rows > 0 && cols > 0){
+				freeMaze(&ir);
+				ir = generateMaze(rows,cols);
+				genMazeFormCtx.windowActive = false;
+				lockMazeEditing = false;
+			} else {
+				save_popup_active = true;
+				snprintf(save_popup_msg, sizeof(save_popup_msg), "Invalid Parameters Passed");
+			}
+			
+		} else if(genMazeFormCtx.cancelPressed){
+			genMazeFormCtx.cancelPressed = false;
+			genMazeFormCtx.windowActive  = false;
+			lockMazeEditing = false;
+		}
 
 		if (fDialogCtx.SelectFilePressed)
         {	
@@ -73,9 +97,9 @@ int main(int argc, char** argv) {
 
 					// TODO substituído: mostrar pop-up usando FileExists para confirmar
 					if (FileExists(save_path)) {
-						snprintf(save_popup_msg, sizeof(save_popup_msg), "Mapa salvo com sucesso:\n%s", save_path);
+						snprintf(save_popup_msg, sizeof(save_popup_msg), "Maze saved successfully:\n%s", save_path);
 					} else {
-						snprintf(save_popup_msg, sizeof(save_popup_msg), "Erro ao salvar o mapa:\n%s", save_path);
+						snprintf(save_popup_msg, sizeof(save_popup_msg), "Error saving the maze:\n%s", save_path);
 					}
 					save_popup_active = true;
 
@@ -89,6 +113,7 @@ int main(int argc, char** argv) {
             }
 
             fDialogCtx.SelectFilePressed = false;
+			lockMazeEditing = false;
         }
 
 			
@@ -98,14 +123,20 @@ int main(int argc, char** argv) {
 
 		BeginDrawing();
 
-			renderMaze(&render,&ir,fDialogCtx.windowActive);
+			renderMaze(&render,&ir,lockMazeEditing);
 				
 			if (fDialogCtx.windowActive) 
 			GuiLock();
 
-				if (GuiButton((Rectangle){ 0, 0, 240, 30 }, GuiIconText(ICON_FILE_OPEN, "Open Maze"))) fDialogCtx.windowActive = true;
-				
-				if (GuiButton((Rectangle){ 240, 0, 240, 30 }, GuiIconText(ICON_FILE_OPEN, "Save Maze"))) {
+				if (GuiButton((Rectangle){   0, 0, 240, 30 }, GuiIconText(ICON_FILE_OPEN, "Open Maze"))) {
+					fDialogCtx.windowActive = true;
+					lockMazeEditing = true;
+				};
+				if (GuiButton((Rectangle){ 240, 0, 340, 30 }, GuiIconText(ICON_FILE_NEW, "Generate Maze"))){
+					genMazeFormCtx.windowActive = true;
+					lockMazeEditing = true;
+				};
+				if (GuiButton((Rectangle){ 580, 0, 240, 30 }, GuiIconText(ICON_FILE_SAVE, "Save Maze"))) {
 					strcpy(fDialogCtx.dirPathText, GetDirectoryPath(maze_path));
         			strcpy(fDialogCtx.fileNameText, GetFileName(maze_path));
 					fDialogCtx.windowActive = true;
@@ -129,6 +160,8 @@ int main(int argc, char** argv) {
 			setDefaultStyle();
 				GuiWindowFileDialog(&fDialogCtx);
 			setCustomStyle();
+			
+			drawGenerateFormWindow(&genMazeFormCtx);
 
 			// --- Popup de confirmação/erro de salvamento ---
 			if (save_popup_active) {

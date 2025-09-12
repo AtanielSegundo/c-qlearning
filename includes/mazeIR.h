@@ -31,10 +31,15 @@ typedef struct
 uint8_t getCell(MazeInternalRepr* m,size_t i, size_t j);
 void setCell(MazeInternalRepr* m,size_t i, size_t j, GridCellType t);
 inline MazeInternalRepr newOpenMaze(size_t rows, size_t cols);
+inline void freeMaze(MazeInternalRepr* m);
 
 #endif
 
 #ifdef MAZE_IR_IMPLEMENTATION
+
+inline void freeMaze(MazeInternalRepr* m){
+	free(m->grid);	
+};
 
 inline MazeInternalRepr newOpenMaze(size_t rows, size_t cols){
     uint8_t* new_grid = calloc(rows*cols,sizeof(uint8_t));

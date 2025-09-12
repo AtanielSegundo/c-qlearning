@@ -147,7 +147,7 @@ void updateMazeClickedCell(MazeRenderCtx *r, MazeInternalRepr *ir){
 
 
 #define MazeRenderCtxInit(r, ...) \
-		_MazeRenderCtxUpdate_((r),(MazeRenderCtx){.width=800,.heigth=450,.offset_x=0,.offset_y=0,.zoom_alpha=1.0f,.cr_lenght=0,.cr_outline=0,.mouse_offset_x=0,.mouse_offset_y=0,.cr_outline_percent=0.05f,__VA_ARGS__})
+		_MazeRenderCtxUpdate_((r),(MazeRenderCtx){.width=800,.heigth=450,.offset_x=0,.offset_y=0,.zoom_alpha=0.75f,.cr_lenght=0,.cr_outline=0,.mouse_offset_x=0,.mouse_offset_y=0,.cr_outline_percent=0.05f,__VA_ARGS__})
 
 #define MazeRenderCtxUpdate(r,...) \
 		_MazeRenderCtxUpdate_((r),(MazeRenderCtx){.width=(r)->width,.heigth=(r)->heigth,.offset_x=(r)->offset_x,.offset_y=(r)->offset_y, \ 
