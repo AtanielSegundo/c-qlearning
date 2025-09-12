@@ -360,7 +360,10 @@ void GuiWindowFileDialog(GuiWindowFileDialogState *state)
         // File selection handling (directory traversal)
         if ((state->filesListActive >= 0) && (state->filesListActive != state->prevFilesListActive))
         {
-            strcpy(state->fileNameText, GetFileName(state->dirFiles.paths[state->filesListActive]));
+            if(state->saveFileMode){
+				strcpy(state->fileNameTextCopy, state->fileNameText);
+				strcpy(state->fileNameText, GetFileName(state->dirFiles.paths[state->filesListActive]));
+			}
 
             if (DirectoryExists(TextFormat("%s/%s", state->dirPathText, state->fileNameText)))
             {
@@ -374,8 +377,12 @@ void GuiWindowFileDialog(GuiWindowFileDialogState *state)
                 strcpy(state->dirPathTextCopy, state->dirPathText);
 
                 state->filesListActive = -1;
-                strcpy(state->fileNameText, "\0");
-                strcpy(state->fileNameTextCopy, state->fileNameText);
+                if (!state->saveFileMode){
+					strcpy(state->fileNameText, "\0");
+                	strcpy(state->fileNameTextCopy, state->fileNameText);
+				} else {
+					strcpy(state->fileNameText,state->fileNameTextCopy);
+				}
             }
 
             state->prevFilesListActive = state->filesListActive;

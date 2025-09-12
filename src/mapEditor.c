@@ -32,7 +32,7 @@
 int main(int argc, char** argv) {	
 	// ARGUMENT HANDLING
 	
-	char maze_path[512] = "random.maze";
+	char maze_path[512] = {0};
 	char save_path[512] = {0};
 	
 	// Popup de confirmação de salvamento
@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
 	// RAYLIB STARTUP STUFF
 	SetTraceLogLevel(LOG_WARNING); 
 	
-	MazeInternalRepr ir  = generateMaze(10,10);
+	MazeInternalRepr ir  = {0};
 	MazeRenderCtx render = {0};
 
 	MazeRenderCtxInit(&render);
@@ -70,6 +70,7 @@ int main(int argc, char** argv) {
 			if (rows > 0 && cols > 0){
 				freeMaze(&ir);
 				ir = generateMaze(rows,cols);
+				strcpy(maze_path,genMazeFormCtx.mazeName);
 				genMazeFormCtx.windowActive = false;
 				lockMazeEditing = false;
 			} else {
@@ -141,6 +142,7 @@ int main(int argc, char** argv) {
         			strcpy(fDialogCtx.fileNameText, GetFileName(maze_path));
 					fDialogCtx.windowActive = true;
 					fDialogCtx.saveFileMode = true;
+					lockMazeEditing = true;
 				}
 
 				int info_x = UI_LEFT_X;

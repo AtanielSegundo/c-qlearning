@@ -11,4 +11,4 @@ release: src/*
 
 debug: src/*
 	# MAP EDITOR
-	gcc ./src/mapEditor.c $(debug_flags) -o build/mapEditor.exe $(raylib) -I ./includes/ -mwindows
+	gcc ./src/mapEditor.c $(debug_flags) -o build/mapEditor.exe $(raylib) -I ./includes/ 

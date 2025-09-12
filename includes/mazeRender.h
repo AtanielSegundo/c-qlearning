@@ -13,8 +13,8 @@ typedef struct {
 	size_t heigth;
 
 	// WINDOW START OFFSET
-	size_t offset_x;
-	size_t offset_y;			// THE Y = 0 => START IN WINDOW UPPER LEFT
+	int offset_x;
+	int offset_y;			// THE Y = 0 => START IN WINDOW UPPER LEFT
 	int mouse_offset_x;
 	int mouse_offset_y;
 
@@ -22,8 +22,8 @@ typedef struct {
 	float  zoom_alpha;
 
 	// CELL RECTANGLE PARAMETERS, cr := cell rect
-	size_t cr_lenght;
-	size_t cr_outline;
+	int cr_lenght;
+	int cr_outline;
 	float cr_outline_percent;
 
 } MazeRenderCtx;
@@ -47,14 +47,19 @@ void _MazeRenderCtxUpdate_(MazeRenderCtx *r, MazeRenderCtx des_in){
 
 void UpdateCellRectParams(MazeRenderCtx *r, MazeInternalRepr *ir){
 	if (ir->rows == 0 || ir->cols == 0) return;
-	
-	r->cr_lenght  = __min(r->width/ir->cols, r->heigth/ir->rows);  
-	r->offset_x   = (r->width - r->cr_lenght*ir->cols) / 2;
-	r->offset_y   = (r->heigth - r->cr_lenght*ir->rows) / 2;
 
-	r->cr_lenght  = r->zoom_alpha*r->cr_lenght;
-	r->cr_outline = (uint8_t)(r->cr_outline_percent*(float)r->cr_lenght);
-};
+	float base_cell = fminf((float)r->width / (float)ir->cols,
+	                        (float)r->heigth / (float)ir->rows);
+
+	float scaled_cell = base_cell * r->zoom_alpha;
+	if (scaled_cell < 1.0f) scaled_cell = 1.0f; // evita 0
+
+	r->cr_lenght = (int)floorf(scaled_cell);
+	r->cr_outline = (int)floorf(r->cr_outline_percent * (float)r->cr_lenght);
+
+	r->offset_x = (int)floorf(((float)r->width - (float)r->cr_lenght * (float)ir->cols) * 0.5f);
+	r->offset_y = (int)floorf(((float)r->heigth - (float)r->cr_lenght * (float)ir->rows) * 0.5f);
+}
 
 void DrawRectangleWithOutline(int posX, int posY, int width, int height, Color color, int offset, Color outline_color){
     DrawRectangle(posX,posY,width,height,outline_color);
