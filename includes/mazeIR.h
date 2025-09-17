@@ -1,6 +1,5 @@
 #include <stdint.h>
 #include <stdlib.h>
-#include "raylib.h"
 
 #ifndef  MAZE_IR_H
 
@@ -13,13 +12,6 @@ typedef enum{
     GRID_AGENT_START  =  9
 } GridCellType;
 
-const Color cellTypeToColor[] = {
-    [GRID_OPEN       ] = WHITE,
-    [GRID_WALL       ] = RED,
-    [GRID_AGENT_GOAL ] = GREEN,
-    [GRID_AGENT_START] = BLUE     
-};
-
 typedef struct 
 {
     size_t rows;
@@ -29,9 +21,12 @@ typedef struct
 } MazeInternalRepr;
 
 uint8_t getCell(MazeInternalRepr* m,size_t i, size_t j);
+
 void setCell(MazeInternalRepr* m,size_t i, size_t j, GridCellType t);
-inline MazeInternalRepr newOpenMaze(size_t rows, size_t cols);
-inline void freeMaze(MazeInternalRepr* m);
+
+MazeInternalRepr newOpenMaze(size_t rows, size_t cols);
+
+void freeMaze(MazeInternalRepr* m);
 
 #endif
 

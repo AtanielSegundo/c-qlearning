@@ -2,36 +2,31 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
-
+#include <stdlib.h>
 
 #include "raylib.h"
-// #include "argparse.h"
-
-#define RAYGUI_IMPLEMENTATION
 #include "raygui.h"
-#undef RAYGUI_IMPLEMENTATION 
 
 #define GUI_WINDOW_FILE_DIALOG_IMPLEMENTATION
 #include "gui_window_file_dialog.h"
+
+#define MAZE_IR_IMPLEMENTATION
+#include "mazeIR.h"
+#undef MAZE_IR_IMPLEMENTATION
 
 #define MAZE_RENDER_IMPLEMENTATION
 #include "mazeRender.h"
 
 #include "mazeGeneration.h"
 
-#define MAZE_IR_IMPLEMENTATION
-#include "mazeIR.h"
-
 #define UI_IMPLEMENTATION
 #include "UI.h"
-
 
 #define WINDOW_WIDTH  1280U
 #define WINDOW_HEIGTH  720U
 
 int main(int argc, char** argv) {	
 	// ARGUMENT HANDLING
-	
 	char maze_path[512] = {0};
 	char save_path[512] = {0};
 	
@@ -48,7 +43,7 @@ int main(int argc, char** argv) {
 	MazeRenderCtxInit(&render);
 	
 	SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-	InitWindow(WINDOW_WIDTH, WINDOW_HEIGTH, "map editor");
+	InitWindow(WINDOW_WIDTH, WINDOW_HEIGTH, "Maze Editor");
     SetTargetFPS(60);       
     
 	setCustomStyle();

@@ -7,6 +7,13 @@
 
 #define MAZE_RENDER_H
 
+const Color cellTypeToColor[] = {
+    [GRID_OPEN       ] = WHITE,
+    [GRID_WALL       ] = RED,
+    [GRID_AGENT_GOAL ] = GREEN,
+    [GRID_AGENT_START] = BLUE     
+};
+
 typedef struct {
 	// WINDOW RENDER INFO
 	size_t width;

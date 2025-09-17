@@ -1,2 +1,5 @@
 build/*
 w64devkit
+.old/*
+*.o
+.vscode/*

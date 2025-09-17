@@ -2,7 +2,6 @@
 
 #define MAZE_GENERATION_H
 
-
 #include "mazeIR.h"
 
 #include <time.h>
