@@ -1,3 +1,4 @@
+#include <string.h>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -41,8 +42,8 @@ inline MazeInternalRepr newOpenMaze(size_t rows, size_t cols){
     return (MazeInternalRepr){.rows=rows,.cols=cols,.grid=new_grid};
 }
 
-uint8_t getCell(MazeInternalRepr* m,size_t i, size_t j){
-    return m->grid[(i*m->cols)+j];
+uint8_t getCell(MazeInternalRepr* m,size_t row, size_t col){
+    return m->grid[(row*m->cols)+col];
 }
 
 void setCell(MazeInternalRepr* m,size_t i, size_t j, GridCellType t){
