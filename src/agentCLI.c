@@ -1,10 +1,12 @@
 #include <stdio.h>
+#include <conio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <time.h>
 #include <math.h>
 #include <string.h>
+#include <signal.h>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -102,6 +104,15 @@ state_t getFirstMatchingCell(MazeEnv *m,GridCellType t){
 		}
 	return (state_t){0,0};
 }
+
+size_t countAllMatchingCells(MazeEnv *m,GridCellType t){
+	size_t count = 0;
+	for(size_t row=0; row < m->rows; row++)
+	for(size_t col=0; col < m->cols; col++){
+		if(getCell(m,col,row) == t) count++;
+	}
+	return count;
+};
 
 void agentSetSeed(Agent* self,unsigned int seed){
 	self->seed = seed;
@@ -202,7 +213,7 @@ void agentQtableUpdate(Agent* self,state_t next,stepResult sr){
 }
 
 void agentEpsilonDecay(Agent* self){
-	self->epsilon -= self->epsilon_decay;  
+	self->epsilon *= self->epsilon_decay;  
 	if(self->epsilon < 0.0f) self->epsilon = 0.0f;
 };
 
@@ -242,49 +253,65 @@ char* prompt_path_via_stdin(void){
     return strdup(buf);
 }
 
-void prompt_training_params(float* out_lr, float* out_dr, float* out_eps_decay){
-    printf("Parametros de treinamento (enter para usar default entre parenteses):\n");
-    printf(" Learning rate (default 0.6): ");
-    if(scanf("%f", out_lr) != 1) { *out_lr = 0.6f; while(getchar()!='\n'); }
-    printf(" Discount factor (gamma) (default 0.9): ");
-    if(scanf("%f", out_dr) != 1) { *out_dr = 0.9f; while(getchar()!='\n'); }
-    printf(" Epsilon decay (default 1e-4): ");
-    if(scanf("%f", out_eps_decay) != 1) { *out_eps_decay = 1e-4f; while(getchar()!='\n'); }
-    // flush newline
-    while(getchar()!='\n');
+static void read_float(const char* prompt, float* out, float def) {
+    char buf[128];
+    if(*out > 0.01f){
+		printf("%s (default %.2f): ", prompt, def);
+	} else {
+		printf("%s (default %.2e): ", prompt, def);
+	}
+	
+    if (!fgets(buf, sizeof(buf), stdin)) {
+        *out = def;
+        return;
+    }
+
+    if (buf[0] == '\n') {
+        *out = def;
+        return;
+    }
+
+    char* endptr;
+    float val = strtof(buf, &endptr);
+    if (endptr == buf) {
+        *out = def;
+    } else {
+        *out = val;
+    }
 }
 
 /* ---------- training runner (extrai main loop para chamar a partir do menu) ---------- */
 
-#define PRINT_EPISODE_EVERY 100
+#define NEXT_BEST_RATE_INCREMENT (0.1f)
 #define SUCCESS_WINDOW 100
 #define SUCCESS_THRESHOLD 0.8f
 
-void run_training(const char* map_path, float lr, float dr, float eps_decay) {
-    MazeEnv ir = {0};
-    if(readMazeNumpy(map_path,&ir) == -1) 
-	if(readMazeRaw(map_path,&ir) == -1) return;
+void run_training(MazeEnv* ir,const char* map_path, float lr, float dr, float eps_decay) {
+	bool stop_train = false;
+	char flag_char = '\0';
+	char temp_flag = '\0';
+	float next_best_sucess_rate = 0.0f;
 
-    Agent* agent = newAgent(&ir, lr, dr, eps_decay, (unsigned long)time(NULL));
-    size_t MAX_STEPS_PER_EPISODE = ACTION_N_ACTIONS*(ir.cols*ir.rows);
+    Agent* agent = newAgent(ir, lr, dr, eps_decay, (unsigned long)time(NULL));
+    size_t MAX_STEPS_PER_EPISODE = ACTION_N_ACTIONS*(ir->cols*ir->rows);
     size_t current_episode = 0;
 
     int success_history[SUCCESS_WINDOW];
     for(int i=0;i<SUCCESS_WINDOW;i++) success_history[i]=0;
     int success_index = 0;
 
-    printf("Maze loaded: rows=%zu cols=%zu\n", ir.rows, ir.cols);
+    printf("Maze loaded: rows=%zu cols=%zu\n", ir->rows, ir->cols);
     printf("Agent start: x=%u y=%u\n", (unsigned)agent->agent_start.x, (unsigned)agent->agent_start.y);
 
-    while(current_episode < SIZE_MAX){
+    while(current_episode < SIZE_MAX && !stop_train){
         agentRestart(agent);
         size_t steps_taken = 0;
         bool reached_goal = false;
 
         for(int step = 0; step < (int)MAX_STEPS_PER_EPISODE; step++){
-            agentPolicy(&ir,agent);
+            agentPolicy(ir,agent);
             state_t next = GetNextState(agent->current_s,agent->policy_action);
-            stepResult sr = stepIntoState(&ir,next);
+            stepResult sr = stepIntoState(ir,next);
 
             agentQtableUpdate(agent,next,sr);
             agent->accum_reward += sr.reward;
@@ -306,15 +333,21 @@ void run_training(const char* map_path, float lr, float dr, float eps_decay) {
         for(int i=0; i<SUCCESS_WINDOW; i++) sum += success_history[i];
         float success_rate = (float)sum / SUCCESS_WINDOW;
 
-        if(current_episode % PRINT_EPISODE_EVERY == 0 || reached_goal) {
-            printf("Episode %zu end | steps=%zu accumulated_reward=%.2f | success_rate=%.2f\n",
-                current_episode, steps_taken, (double)agent->accum_reward, success_rate);
+        if( success_rate >= next_best_sucess_rate || flag_char == 'v') {
+            printf("Episode %zu end | steps=%zu accum_reward=%.2f | epsilon=%.2f | success_rate=%.2f\n",
+                current_episode, steps_taken, (double)agent->accum_reward,agent->epsilon,success_rate);
+			next_best_sucess_rate += NEXT_BEST_RATE_INCREMENT;
         }
 
         if(success_rate >= SUCCESS_THRESHOLD) {
             printf("Policy converged with %.1f%% success.\n", success_rate*100);
             break;
         }
+		
+		if(kbhit() && (temp_flag = _getch()) == 'q') stop_train = true;
+		
+		flag_char = temp_flag == flag_char ? '\0' : temp_flag;
+		temp_flag = '\0';
 
         agentEpsilonDecay(agent);
         current_episode++;
@@ -323,20 +356,22 @@ void run_training(const char* map_path, float lr, float dr, float eps_decay) {
     printf("Training finished after %zu episodes.\n", current_episode);
 
     // Simula melhor trajetória (epsilon=0)
-    printf("SIMULATING THE BEST TRAJECTORY FOUND\n");
-    agent->epsilon = 0.0f;
-    agentRestart(agent);
-    for(int step=0;step < MAX_STEPS_PER_EPISODE;step++){
-        agentPolicy(&ir,agent);
-        state_t before = agent->current_s;
-        state_t next = GetNextState(agent->current_s,agent->policy_action);
-        stepResult sr = stepIntoState(&ir,next);
-        printf("(%u) (%u,%u) -> (%u,%u) %s\n",step,before.x,before.y,next.x,next.y,
-            sr.isGoal ? "[GOAL TARGET]" : "");
-        if(sr.terminal) break;
-        agentUpdateState(agent,next);
-    }
-
+    if(!stop_train){
+		printf("SIMULATING THE BEST TRAJECTORY FOUND\n");
+    	agent->epsilon = 0.0f;
+    	agentRestart(agent);
+    	for(int step=0;step < MAX_STEPS_PER_EPISODE;step++){
+    	    agentPolicy(ir,agent);
+    	    state_t before = agent->current_s;
+    	    state_t next = GetNextState(agent->current_s,agent->policy_action);
+    	    stepResult sr = stepIntoState(ir,next);
+    	    printf("(%u) (%u,%u) -> (%u,%u) %s\n",step,before.x,before.y,next.x,next.y,
+    	        sr.isGoal ? "[GOAL TARGET]" : "");
+    	    if(sr.terminal) break;
+    	    agentUpdateState(agent,next);
+    	}
+	}
+	
     // cleanup
     if(agent){
         free(agent->q_table.vals);
@@ -353,12 +388,25 @@ void run_training(const char* map_path, float lr, float dr, float eps_decay) {
     "\0";
 #endif
 
+void handle_interrrupt(int signal){
+	printf("[ERROR] INTERRUPT EVENT EXIT\n");
+	exit(1);
+};
+
+void prompt_training_params(float sugested_epsilon_decay,float* out_lr, float* out_dr, float* out_eps_decay){
+    printf("Train Parameters (enter => current value):\n");
+    read_float(" Learning rate", out_lr, *out_lr);
+    read_float(" Discount factor (gamma)", out_dr, *out_dr);
+    read_float(" Epsilon decay", out_eps_decay, sugested_epsilon_decay);
+}
+
 int main(int argc, char** argv){
+	signal(SIGINT,handle_interrrupt);
     char *map_path = NULL;
     float lr = 0.6f, dr = 0.9f, eps_decay = 1e-4f;
+	MazeEnv ir = {0};
 	size_t sucess_window_size = SUCCESS_WINDOW;
 	size_t sucess_treshold = SUCCESS_THRESHOLD;
-	
     // menu
     while(1){
 		printf("\nMaze: %s\n",map_path);
@@ -382,7 +430,7 @@ int main(int argc, char** argv){
         while(getchar()!='\n');
 
         if(choice == 3){
-            run_training(map_path, lr, dr, eps_decay);
+            run_training(&ir,map_path, lr, dr, eps_decay);
         } else if(choice == 4){
             printf("[OPCAO] Visualizar modelo treinado selecionada. (Placeholder — implemente você aqui.)\n");
             
@@ -391,6 +439,10 @@ int main(int argc, char** argv){
 			#ifdef _WIN32
 				free(map_path);
 				map_path = windows_open_file_dialog(filter, NULL);
+
+			    if(readMazeNumpy(map_path,&ir) == -1) 
+				if(readMazeRaw(map_path,&ir) == -1) free(map_path);
+
 			#else
 				free(map_path);
 				map_path = prompt_path_via_stdin();
@@ -400,7 +452,8 @@ int main(int argc, char** argv){
 				printf("\nNenhum mapa fornecido\n");
 			}
         } else if (choice == 2){
-			prompt_training_params(&lr,&dr,&eps_decay);
+			float suggested_decay = 1.0f - 1.0f/((float)ACTION_N_ACTIONS*(ir.cols*ir.rows)*countAllMatchingCells(&ir,GRID_OPEN));
+			prompt_training_params(suggested_decay,&lr,&dr,&eps_decay);
 		} 
 		else if(choice == 5){
             break;
