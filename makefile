@@ -28,7 +28,7 @@ build: build/agentCLI.exe build/mazeEditor.exe
 # --------------------------------------------------------------------
 # Binário agentCLI (linha de comando)
 # --------------------------------------------------------------------
-build/agentCLI.exe: src/agentCLI.c
+build/agentCLI.exe: src/agentCLI.c includes/agent.h
 	@echo ">>> Building agentCLI (linha de comando)"
 	gcc $< $(include_path) $(build_flags) -o $@ -lcomdlg32
 

@@ -6,6 +6,8 @@
 
 #define MAZE_IR_H
 
+typedef struct {size_t row; size_t col;} cellId;
+
 typedef enum{
     GRID_OPEN         =  0,
     GRID_WALL         =  1,
@@ -22,8 +24,10 @@ typedef struct
 } MazeInternalRepr;
 
 uint8_t getCell(MazeInternalRepr* m,size_t i, size_t j);
-
 void setCell(MazeInternalRepr* m,size_t i, size_t j, GridCellType t);
+
+cellId getFirstMatchingCell(MazeInternalRepr *m,GridCellType t);
+size_t countAllMatchingCells(MazeInternalRepr *m,GridCellType t);
 
 MazeInternalRepr newOpenMaze(size_t rows, size_t cols);
 
@@ -45,6 +49,23 @@ inline MazeInternalRepr newOpenMaze(size_t rows, size_t cols){
 uint8_t getCell(MazeInternalRepr* m,size_t row, size_t col){
     return m->grid[(row*m->cols)+col];
 }
+
+cellId getFirstMatchingCell(MazeInternalRepr *m,GridCellType t){
+	for(size_t row=0; row < m->rows; row++)
+		for(size_t col=0; col < m->cols; col++){
+			if(getCell(m,col,row) == t) return (cellId){(uint8_t)col,(uint8_t)row};
+		}
+	return (cellId){0,0};
+}
+
+size_t countAllMatchingCells(MazeInternalRepr *m,GridCellType t){
+	size_t count = 0;
+	for(size_t row=0; row < m->rows; row++)
+	for(size_t col=0; col < m->cols; col++){
+		if(getCell(m,col,row) == t) count++;
+	}
+	return count;
+};
 
 void setCell(MazeInternalRepr* m,size_t i, size_t j, GridCellType t){
     m->grid[(i*m->cols)+j] = t;
