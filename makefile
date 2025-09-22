@@ -23,7 +23,7 @@ endif
 # --------------------------------------------------------------------
 # Alvo principal: constrói tudo
 # --------------------------------------------------------------------
-build: build/agentCLI.exe build/mazeEditor.exe
+build: build/agentCLI.exe build/mazeEditor.exe build/agentViewer.exe
 
 # --------------------------------------------------------------------
 # Binário agentCLI (linha de comando)
@@ -33,11 +33,19 @@ build/agentCLI.exe: src/agentCLI.c includes/agent.h
 	gcc $< $(include_path) $(build_flags) -o $@ -lcomdlg32
 
 # --------------------------------------------------------------------
-# Binário mazeEditor (interface gráfica)
+# Binário agentViwer (GUI)
+# depende da biblioteca raygui
+# --------------------------------------------------------------------
+build/agentViewer.exe: src/agentViewer.c libs/raygui.a includes/agent.h
+	@echo ">>> Building Agent Viewer (GUI)"
+	gcc $< $(include_path) $(build_flags) -o $@ $(raylib) $(raygui) $(backend)
+
+# --------------------------------------------------------------------
+# Binário mazeEditor (GUI)
 # depende da biblioteca raygui
 # --------------------------------------------------------------------
 build/mazeEditor.exe: src/mazeEditor.c libs/raygui.a
-	@echo ">>> Building mazeEditor (interface gráfica)"
+	@echo ">>> Building mazeEditor (GUI)"
 	gcc $< $(include_path) $(build_flags) -o $@ $(raylib) $(raygui) $(backend)
 
 # --------------------------------------------------------------------
@@ -45,12 +53,14 @@ build/mazeEditor.exe: src/mazeEditor.c libs/raygui.a
 # --------------------------------------------------------------------
 libs/raygui.a: src/raygui.c
 	@echo ">>> Building raygui static library"
-	gcc -c $< -DRAYGUI_IMPLEMENTATION -o raygui.o $(raylib) $(include_path)
-	ar rcs $@ raygui.o
+	gcc -c $< -DRAYGUI_IMPLEMENTATION -o build/raygui.o $(raylib) $(include_path)
+	ar rcs $@ build/raygui.o
+	rm build/raygui.o
+
 
 # --------------------------------------------------------------------
 # Limpeza
 # --------------------------------------------------------------------
 clean:
 	@echo ">>> Cleaning build files"
-	rm -f build/*.exe raygui.o libs/raygui.a
+	rm -f build/*.exe libs/raygui.a

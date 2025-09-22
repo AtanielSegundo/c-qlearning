@@ -6,7 +6,7 @@
 #define AGENT_H
 
 typedef MazeInternalRepr MazeEnv;
-typedef struct {int8_t dx; int8_t dy;} action_delta_t;
+typedef struct {int32_t dx; int32_t dy;} action_delta_t;
 typedef struct {size_t x; size_t y;} state_t;
 typedef float reward_t;
 typedef reward_t q_val_t;
@@ -58,7 +58,7 @@ static action_delta_t actionToDeltaMap[] = {
 }; 
 
 static reward_t GridTypeToReward[] = {
-	[GRID_OPEN]        = 0.0f,
+	[GRID_OPEN]        = -1e-2f,
 	[GRID_WALL]        = -1.0f,
 	[GRID_AGENT_GOAL]  = 1.0f,
 	[GRID_AGENT_START] = 0.0f
@@ -86,7 +86,6 @@ int agentSaveQtable(Agent* agent,char* save_path);
 int agentReadQtable(Agent* agent, const char* load_path);
 
 stepResult stepIntoState(MazeEnv* e,state_t s);
-void agentSetSeed(Agent* self,unsigned int seed);
 
 q_val_t getQtableValue(Agent* self,state_t s,Action a);
 void setQtableValue(Agent* self,state_t s,Action a, q_val_t q);
@@ -116,29 +115,29 @@ void agentSetSeed(Agent* self,unsigned int seed){
 	srand((unsigned int)self->seed);
 };
 
+void agentInit(Agent* agent,MazeEnv* env,float lr,float dr,double eps_decay, unsigned long seed){
+	agent->learning_rate = lr;
+	agent->discount_rate = dr;
+	agent->epsilon_decay = eps_decay;
+	agent->epsilon = 1.0f;
+	agentSetSeed(agent,(unsigned int)seed);
+	agent->policy_action = ACTION_NONE;
+	cellId _temp_id = getFirstMatchingCell(env,GRID_AGENT_START);
+	agent->current_s.x = _temp_id.col;
+	agent->current_s.y = _temp_id.row;
+	agent->agent_start = agent->current_s;
+	agent->accum_reward = 0.0f;
+};
+
 Agent* newAgent(MazeEnv *env,float lr,float dr,double eps_decay, unsigned long seed){
 	Agent* ag = (Agent*)calloc(1,sizeof(Agent));
-	ag->learning_rate = lr;
-	ag->discount_rate = dr;
-	ag->epsilon_decay = eps_decay;
-	ag->epsilon = 1.0f;
-	
-	agentSetSeed(ag,(unsigned int)seed);
-	
-	ag->policy_action = ACTION_NONE;
-	cellId _temp_id = getFirstMatchingCell(env,GRID_AGENT_START);
-	ag->current_s.x = _temp_id.col;
-	ag->current_s.y = _temp_id.row;
-	ag->agent_start = ag->current_s;
-	ag->accum_reward = 0.0f;
-	
+	agentInit(ag,env,lr,dr, eps_decay, seed);
 	ag->q_table = (q_table_t){.len_state_x=env->cols,
 							  .len_state_y=env->rows,
 							  .len_state_actions=ACTION_N_ACTIONS,
 							  .vals = NULL
 							 };
 	ag->q_table.vals = (q_val_t*)calloc((env->cols*env->rows)*ACTION_N_ACTIONS,sizeof(q_val_t));
-	
 	return ag;
 };
 
@@ -190,7 +189,7 @@ state_t GetNextState(state_t s, Action a){
 	action_delta_t da = actionToDeltaMap[a];
 	int nx = (int)s.x + (int)da.dx;
 	int ny = (int)s.y + (int)da.dy;
-	return (state_t){(uint8_t)nx,(uint8_t)ny};
+	return (state_t){(size_t)nx,(size_t)ny};
 };
 
 void agentUpdateState(Agent* a, state_t new_state){
@@ -230,79 +229,71 @@ void agentEpsilonDecay(Agent* self,decay_fn fn){
 	if(self->epsilon > 1.0f) self->epsilon = 1.0f;
 };
 
-int agentSaveQtable(Agent* agent,char* save_path){
-	if(!save_path){
-		printf("[ERROR] Cant find the save path selected\n");
-		return -1;
-	}
-	FILE* f = fopen(save_path,"wb");
-	// <name>.qtable format = |u64: len_state_x| u64: len_state_y | u64: len_state_actions | float: vals[len_state_x*len_state_y*len_state_actions]
-	fwrite(&agent->q_table.len_state_x,sizeof(size_t),1,f);
-	fwrite(&agent->q_table.len_state_y,sizeof(size_t),1,f);
-	fwrite(&agent->q_table.len_state_actions,sizeof(size_t),1,f);
 
-	size_t q_table_len = agent->q_table.len_state_x * agent->q_table.len_state_y * agent->q_table.len_state_actions;
-	fwrite(agent->q_table.vals,sizeof(q_val_t),q_table_len,f);
+int agentSaveQtable(Agent* agent, char* save_path){
+    if(!agent || !save_path) return -1;
+    FILE* f = fopen(save_path,"wb");
+    if(!f) { perror("fopen"); return -1; }
 
-	return 0;
-};
+    uint64_t nx = (uint64_t)agent->q_table.len_state_x;
+    uint64_t ny = (uint64_t)agent->q_table.len_state_y;
+    uint64_t na = (uint64_t)agent->q_table.len_state_actions;
+
+    if(fwrite(&nx, sizeof(uint64_t), 1, f) != 1) { fclose(f); return -1; }
+    if(fwrite(&ny, sizeof(uint64_t), 1, f) != 1) { fclose(f); return -1; }
+    if(fwrite(&na, sizeof(uint64_t), 1, f) != 1) { fclose(f); return -1; }
+
+    size_t q_table_len = (size_t)nx * (size_t)ny * (size_t)na;
+    if(q_table_len == 0){ fclose(f); return -1; }
+
+    size_t wrote = fwrite(agent->q_table.vals, sizeof(q_val_t), q_table_len, f);
+    if(wrote != q_table_len){
+        fprintf(stderr, "[ERROR] wrote %zu of %zu qvals\n", wrote, q_table_len);
+        fclose(f);
+        return -1;
+    }
+
+    fflush(f);
+    fclose(f);
+    return 0;
+}
 
 int agentReadQtable(Agent* agent, const char* load_path){
-    if(!agent || !load_path){
-        fprintf(stderr,"[ERROR] agentReadQtable: argumento NULL\n");
-        return -1;
-    }
-
+    if(!agent || !load_path) return -1;
     FILE *f = fopen(load_path, "rb");
-    if(!f){
-        fprintf(stderr,"[ERROR] failed to open '%s' for reading: %s\n", load_path, strerror(errno));
-        return -1;
+    if(!f){ perror("fopen"); return -1; }
+
+    uint64_t nx=0, ny=0, na=0;
+    if(fread(&nx, sizeof(uint64_t), 1, f) != 1 ||
+       fread(&ny, sizeof(uint64_t), 1, f) != 1 ||
+       fread(&na, sizeof(uint64_t), 1, f) != 1) {
+        fprintf(stderr, "[ERROR] corrupt header\n"); fclose(f); return -1;
     }
 
-    size_t nx = 0, ny = 0, na = 0;
-    if (fread(&nx, sizeof(size_t), 1, f) != 1 ||
-        fread(&ny, sizeof(size_t), 1, f) != 1 ||
-        fread(&na, sizeof(size_t), 1, f) != 1) {
-        fprintf(stderr, "[ERROR] corrupt qtable header in '%s'\n", load_path);
-        fclose(f);
-        return -1;
-    }
+    if(nx == 0 || ny == 0 || na == 0){ fclose(f); return -1; }
 
-    /* sanity check */
-    if (nx == 0 || ny == 0 || na == 0) {
-        fprintf(stderr, "[ERROR] invalid dimensions in qtable file '%s'\n", load_path);
-        fclose(f);
-        return -1;
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    long expected = (long)(3*sizeof(uint64_t) + (uint64_t)nx*ny*na*sizeof(q_val_t));
+    if(fsize != expected){
+        fprintf(stderr, "[WARN] file size mismatch: %ld != %ld (expected)\n", fsize, expected);
     }
+    fseek(f, 3*sizeof(uint64_t), SEEK_SET);
 
-    size_t q_table_len = nx * ny * na;
-    q_val_t *vals = (q_val_t*)malloc(sizeof(q_val_t) * q_table_len);
-    if(!vals){
-        fprintf(stderr, "[ERROR] alloc fail reading qtable (%zu entries)\n", q_table_len);
-        fclose(f);
-        return -1;
-    }
+    size_t qlen = (size_t)nx * (size_t)ny * (size_t)na;
+    q_val_t *vals = malloc(sizeof(q_val_t) * qlen);
+    if(!vals){ fclose(f); return -1; }
 
-    size_t read = fread(vals, sizeof(q_val_t), q_table_len, f);
-    if(read != q_table_len){
-        fprintf(stderr, "[ERROR] unexpected EOF or read error in '%s' (expected %zu, got %zu)\n", load_path, q_table_len, read);
-        free(vals);
-        fclose(f);
-        return -1;
-    }
+    size_t read = fread(vals, sizeof(q_val_t), qlen, f);
+    if(read != qlen){ fprintf(stderr,"[ERROR] read %zu of %zu qvals\n", read, qlen); free(vals); fclose(f); return -1; }
 
     fclose(f);
 
-    /* replace existing q_table (free previous memory if any) */
-    if(agent->q_table.vals){
-        free(agent->q_table.vals);
-        agent->q_table.vals = NULL;
-    }
-    agent->q_table.len_state_x = nx;
-    agent->q_table.len_state_y = ny;
-    agent->q_table.len_state_actions = na;
+    if(agent->q_table.vals) free(agent->q_table.vals);
     agent->q_table.vals = vals;
-
+    agent->q_table.len_state_x = (size_t)nx;
+    agent->q_table.len_state_y = (size_t)ny;
+    agent->q_table.len_state_actions = (size_t)na;
     return 0;
 }
 

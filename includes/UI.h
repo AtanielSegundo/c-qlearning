@@ -61,7 +61,7 @@ void setDefaultStyle(void){
 		}
 		GuiSetIconScale(1);     
 	}
-}
+}	
 
 
 typedef struct {
