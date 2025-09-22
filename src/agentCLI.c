@@ -262,25 +262,25 @@ Agent* run_training(MazeEnv* ir,const char* map_path, float lr, float dr, double
     printf("Training finished after %zu episodes.\n", current_episode);
 
     // Simula melhor trajetória (epsilon=0)
-    // if(!stop_train){
-	// 	printf("SIMULATING THE BEST TRAJECTORY FOUND\n");
-    // 	agent->epsilon = 0.0f;
-    // 	agentRestart(agent);
-    // 	for(int step=0;step < MAX_STEPS_PER_EPISODE;step++){
-    // 	    agentPolicy(agent,ir);
-    // 	    state_t before = agent->current_s;
-    // 	    state_t next = GetNextState(agent->current_s,agent->policy_action);
-    // 	    stepResult sr = stepIntoState(ir,next);
-    // 	    printf("(%u) (%u,%u) -> (%u,%u) %s\n",step,before.x,before.y,next.x,next.y,
-    // 	        sr.isGoal ? "[GOAL TARGET]" : "");
-    // 	    if(sr.terminal) break;
-    // 	    agentUpdateState(agent,next);
-    // 	}
-	// }
+    if(!stop_train){
+		printf("SIMULATING THE BEST TRAJECTORY FOUND\n");
+    	agent->epsilon = 0.0f;
+    	agentRestart(agent);
+    	for(int step=0;step < MAX_STEPS_PER_EPISODE;step++){
+    	    agentPolicy(agent,ir);
+    	    state_t before = agent->current_s;
+    	    state_t next = GetNextState(agent->current_s,agent->policy_action);
+    	    stepResult sr = stepIntoState(ir,next);
+    	    printf("(%u) (%u,%u) -> (%u,%u) %s\n",step,before.x,before.y,next.x,next.y,
+    	        sr.isGoal ? "[GOAL TARGET]" : "");
+    	    if(sr.terminal) break;
+    	    agentUpdateState(agent,next);
+    	}
+	}
 	
-    return agent;
-
 	free(success_history);
+    
+	return agent;
 }
 
 void handle_interrrupt(int signal){
