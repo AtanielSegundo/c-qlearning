@@ -267,6 +267,7 @@ Agent* run_training(MazeEnv* ir,const char* map_path, float lr, float dr, double
     	agent->epsilon = 0.0f;
     	agentRestart(agent);
     	for(int step=0;step < MAX_STEPS_PER_EPISODE;step++){
+			if(kbhit() && (temp_flag = _getch()) == 'q') break;
     	    agentPolicy(agent,ir);
     	    state_t before = agent->current_s;
     	    state_t next = GetNextState(agent->current_s,agent->policy_action);

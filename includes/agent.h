@@ -7,7 +7,7 @@
 
 typedef MazeInternalRepr MazeEnv;
 typedef struct {int32_t dx; int32_t dy;} action_delta_t;
-typedef struct {size_t x; size_t y;} state_t;
+typedef struct {int32_t x; int32_t y;} state_t;
 typedef float reward_t;
 typedef reward_t q_val_t;
 typedef enum {
@@ -58,7 +58,7 @@ static action_delta_t actionToDeltaMap[] = {
 }; 
 
 static reward_t GridTypeToReward[] = {
-	[GRID_OPEN]        = -1e-2f,
+	[GRID_OPEN]        = 0.0f,
 	[GRID_WALL]        = -1.0f,
 	[GRID_AGENT_GOAL]  = 1.0f,
 	[GRID_AGENT_START] = 0.0f
@@ -97,8 +97,7 @@ ValAction qtableMaxValAction(Agent* a,state_t s);
 
 stepResult stepIntoState(MazeEnv* e,state_t s){
 	stepResult sr = {0};
-	if ((size_t)s.x >= e->cols || (size_t)s.y >= e->rows) {
-		sr.terminal = true;
+	if (s.x >= e->cols || s.y >= e->rows || s.x < 0 || s.y < 0) {
 		sr.isGoal = false;
 		sr.reward = GridTypeToReward[GRID_WALL];
 	} else {
@@ -145,7 +144,7 @@ q_val_t getQtableValue(Agent* self,state_t s,Action a){
 	size_t n_actions = self->q_table.len_state_actions;
 	size_t n_x = self->q_table.len_state_x;
 	size_t n_y = self->q_table.len_state_y;
-	if ((size_t)s.x >= n_x || (size_t)s.y >= n_y || (size_t)a >= n_actions) return 0.0f;
+	if (s.x < 0 || s.y < 0 || s.x >= n_x || s.y >= n_y || a >= n_actions) return 0.0f;
 	return self->q_table.vals[n_actions*(((size_t)s.y*n_x)+s.x) + a];
 }
 
@@ -153,7 +152,7 @@ void setQtableValue(Agent* self,state_t s,Action a, q_val_t q){
 	size_t n_actions = self->q_table.len_state_actions;
 	size_t n_x = self->q_table.len_state_x;
 	size_t n_y = self->q_table.len_state_y;
-	if ((size_t)s.x >= n_x || (size_t)s.y >= n_y || (size_t)a >= n_actions) return;
+	if (s.x < 0 || s.y < 0 || s.x >= n_x || s.y >= n_y || a >= n_actions) return;
 	self->q_table.vals[n_actions*(((size_t)s.y*n_x)+s.x) + a] = q;
 }
 
@@ -189,12 +188,16 @@ state_t GetNextState(state_t s, Action a){
 	action_delta_t da = actionToDeltaMap[a];
 	int nx = (int)s.x + (int)da.dx;
 	int ny = (int)s.y + (int)da.dy;
-	return (state_t){(size_t)nx,(size_t)ny};
+	return (state_t){(int32_t)nx,(int32_t)ny};
 };
 
 void agentUpdateState(Agent* a, state_t new_state){
-	a->current_s = new_state;
 	a->policy_action = ACTION_NONE;
+	if (new_state.x < 0 || new_state.y < 0 || new_state.x >= a->q_table.len_state_x || new_state.y >= a->q_table.len_state_y){
+		
+	} else{
+		a->current_s = new_state;
+	}
 };
 
 void agentQtableUpdate(Agent* self,state_t next,stepResult sr){

@@ -172,6 +172,16 @@ void moveAgentToClickedCell(Agent* agent,MazeRenderCtx *r,MazeInternalRepr *ir,M
 	}
 }
 
+static void compute_camera_target_for_agent(MazeRenderCtx *render, MazeInternalRepr *ir, Agent *agent, int *out_tx, int *out_ty) {
+    *out_tx = render->mouse_offset_x;
+    *out_ty = render->mouse_offset_y;
+    if (ir->rows > 0 && ir->cols > 0) {
+        state_t s = agent->current_s;
+        *out_tx = (int)((GetScreenWidth() / 2) - (render->offset_x + s.x * render->cr_lenght + render->cr_lenght/2));
+        *out_ty = (int)((GetScreenHeight() / 2) - (render->offset_y + s.y * render->cr_lenght + render->cr_lenght/2));
+    }
+}
+
 int main(int argc, char const *argv[])
 {
 	SetTraceLogLevel(LOG_WARNING); 
@@ -198,6 +208,11 @@ int main(int argc, char const *argv[])
 	double camera_transition_duration = 0.0;
 	int camera_transition_from_x = 0;
 	int camera_transition_from_y = 0;
+	int camera_transition_target_x = 0;
+	int camera_transition_target_y = 0;
+
+	// para detectar movimento do agente
+	state_t prev_agent_pos = { -1, -1 };
 	
 	double lastUpdate = 0.0;
 	double updateInterval = 1.0f;
@@ -281,21 +296,26 @@ int main(int argc, char const *argv[])
 		if (IsKeyPressed(KEY_Z)) {
 			lockCameraToAgent = !lockCameraToAgent;
 			if (lockCameraToAgent) {
-
+				// origem da transição = offset atual
 				prev_mouse_offset_x = render.mouse_offset_x;
 				prev_mouse_offset_y = render.mouse_offset_y;
 				camera_transition_from_x = prev_mouse_offset_x;
 				camera_transition_from_y = prev_mouse_offset_y;
 
-				camera_transition_duration = fmax(updateInterval * 0.5, 0.05);
-				camera_transition_start = GetTime();
-				camera_transition_active = true;
-
+				// recomputa params já com zoom atual
 				render.width = GetScreenWidth();
 				render.heigth = GetScreenHeight();
 				UpdateCellRectParams(&render, &ir);
-			} else {
 
+				// calcula target atual
+				compute_camera_target_for_agent(&render, &ir, &agent, &camera_transition_target_x, &camera_transition_target_y);
+
+				// define duração e inicia transição
+				camera_transition_duration = fmax(updateInterval * 0.5, 0.05);
+				camera_transition_start = GetTime();
+				camera_transition_active = true;
+			} else {
+				// cancelar e restaurar offsets
 				camera_transition_active = false;
 				render.mouse_offset_x = prev_mouse_offset_x;
 				render.mouse_offset_y = prev_mouse_offset_y;
@@ -307,7 +327,25 @@ int main(int argc, char const *argv[])
 			if(now - lastUpdate >= updateInterval){
 				updateAgent(&agent,&ir,&steps_taken,&isAgentGoal);
 				lastUpdate = now;
+				if (lockCameraToAgent) {
+					if (agent.current_s.x != prev_agent_pos.x || agent.current_s.y != prev_agent_pos.y) {
+						camera_transition_from_x = render.mouse_offset_x;
+						camera_transition_from_y = render.mouse_offset_y;
+
+						render.width = GetScreenWidth();
+						render.heigth = GetScreenHeight();
+						UpdateCellRectParams(&render, &ir);
+						compute_camera_target_for_agent(&render, &ir, &agent, &camera_transition_target_x, &camera_transition_target_y);
+
+						camera_transition_duration = fmax(updateInterval * 0.5, 0.05);
+						camera_transition_start = now;
+						camera_transition_active = true;
+					}
+				}
+
+				prev_agent_pos = agent.current_s;
 			}
+
 			moveAgentToClickedCell(&agent,&render,&ir,MOUSE_BUTTON_RIGHT);
 		}
 
@@ -332,31 +370,23 @@ int main(int argc, char const *argv[])
 				render.heigth = GetScreenHeight();
 				UpdateCellRectParams(&render, &ir);
 
-				int target_x = render.mouse_offset_x;
-				int target_y = render.mouse_offset_y;
-				if (ir.rows > 0 && ir.cols > 0) {
-					state_t s = agent.current_s;
-					target_x = (int)( (GetScreenWidth() / 2) - (render.offset_x + s.x * render.cr_lenght + render.cr_lenght/2) );
-					target_y = (int)( (GetScreenHeight() / 2) - (render.offset_y + s.y * render.cr_lenght + render.cr_lenght/2) );
-				}
-
 				if (camera_transition_active) {
 					double now = GetTime();
 					double elapsed = now - camera_transition_start;
 					if (elapsed >= camera_transition_duration) {
-						render.mouse_offset_x = target_x;
-						render.mouse_offset_y = target_y;
+						render.mouse_offset_x = camera_transition_target_x;
+						render.mouse_offset_y = camera_transition_target_y;
 						camera_transition_active = false;
 					} else {
 						float t = (float)(elapsed / camera_transition_duration);
-						// smoothstep (3t^2 - 2t^3)
 						float s = t * t * (3.0f - 2.0f * t);
-						render.mouse_offset_x = (int) (camera_transition_from_x + s * (target_x - camera_transition_from_x));
-						render.mouse_offset_y = (int) (camera_transition_from_y + s * (target_y - camera_transition_from_y));
+						render.mouse_offset_x = (int)(camera_transition_from_x + s * (camera_transition_target_x - camera_transition_from_x));
+						render.mouse_offset_y = (int)(camera_transition_from_y + s * (camera_transition_target_y - camera_transition_from_y));
 					}
 				} else {
-					render.mouse_offset_x = target_x;
-					render.mouse_offset_y = target_y;
+					compute_camera_target_for_agent(&render, &ir, &agent, &camera_transition_target_x, &camera_transition_target_y);
+					render.mouse_offset_x = camera_transition_target_x;
+					render.mouse_offset_y = camera_transition_target_y;
 				}
 
 				renderMaze(&render, &ir, true);
