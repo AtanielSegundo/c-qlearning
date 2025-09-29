@@ -3,7 +3,7 @@ include_path := -I ./includes/
 
 # Flags de compilação
 release_flags := -O3 -march=native
-debug_flags   := -Wall -Wextra -O0 -g
+debug_flags   := -Wall -pedantic -Wextra -O0 -g
 
 # Bibliotecas externas
 raylib  := -I libs/raylib/include -L libs/raylib/lib -lraylib -lgdi32 -lwinmm
