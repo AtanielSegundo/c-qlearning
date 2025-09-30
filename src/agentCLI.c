@@ -202,7 +202,8 @@ inline float manhatan_distance(state_t s1, state_t s2) {
 }
 
 Agent* run_training(MazeEnv* ir,const char* map_path, float lr, float dr, double eps_decay,int sucess_window_size, float sucess_treshold, 
-				  DecayType current_decay_type, bool useDistanceRewardShaping) {
+				  DecayType current_decay_type, 
+				  bool useDistanceRewardShaping, bool blockTranspassing) {
 
 	bool stop_train = false;
 	char flag_char = '\0';
@@ -238,9 +239,15 @@ Agent* run_training(MazeEnv* ir,const char* map_path, float lr, float dr, double
             state_t next = GetNextState(agent->current_s,agent->policy_action);
             stepResult sr = stepIntoState(ir,next);
 			
-			state_t trans_state = sr.invalidNext ? agent->current_s : next;
+			state_t trans_state;
+			
+			if(blockTranspassing){
+				trans_state = sr.invalidNext ? agent->current_s : next;
+			} else {
+				trans_state = next;
+			}
 
-			if (useDistanceRewardShaping) {
+			if (useDistanceRewardShaping && !sr.invalidNext) {
 				float phi_s  = (float)manhatan_distance(agent->current_s, goal_state);
 				float phi_sp = (float)manhatan_distance(trans_state, goal_state);
 				float shaping = dr * (phi_s - phi_sp); 
@@ -273,7 +280,7 @@ Agent* run_training(MazeEnv* ir,const char* map_path, float lr, float dr, double
 			next_best_sucess_rate += NEXT_BEST_RATE_INCREMENT;
         }
 
-        if(success_rate >= sucess_treshold) {
+        if(success_rate >= sucess_treshold && agent->accum_reward > 0) {
             printf("Policy converged with %.1f%% success.\n", success_rate*100);
             break;
         }
@@ -286,7 +293,6 @@ Agent* run_training(MazeEnv* ir,const char* map_path, float lr, float dr, double
 				case 'g': agent->epsilon = agent->epsilon * 2.0f; break;
 				default: break;
 			}
-			fflush(stdin);
 		}
 		
 		flag_char = temp_flag == flag_char ? '\0' : temp_flag;
@@ -330,7 +336,9 @@ void prompt_training_params(double sugested_epsilon_decay_exp,double sugested_ep
                             float* out_lr, float* out_dr, float* out_eps_decay,
                             int* sucess_window_size, float* sucess_treshold,
                             DecayType* out_decay_type,
-                            bool* out_useDistanceRewardShaping) // <-- novo
+                            bool* out_useDistanceRewardShaping,
+							bool* block_transspassing_walls
+						) 
 {
     printf("Train Parameters (enter => current value):\n");
     read_float(" Learning rate", out_lr, *out_lr);
@@ -342,7 +350,8 @@ void prompt_training_params(double sugested_epsilon_decay_exp,double sugested_ep
     printf(" 1 = %s\n", decayTypeToStr[DECAY_TYPE_EXP]);
     int dt_choice = dt_default;
     read_int(" Decay type (enter 0 or 1)", &dt_choice, dt_default);
-    if (dt_choice == DECAY_TYPE_LINEAR || dt_choice == DECAY_TYPE_EXP) {
+    
+	if (dt_choice == DECAY_TYPE_LINEAR || dt_choice == DECAY_TYPE_EXP) {
         *out_decay_type = (DecayType)dt_choice;
         printf("Selected: %s\n",decayTypeToStr[*out_decay_type]);
     } else {
@@ -355,8 +364,13 @@ void prompt_training_params(double sugested_epsilon_decay_exp,double sugested_ep
     read_float(" Sucess treshold",sucess_treshold,*sucess_treshold);
 
     int shaping_int = *out_useDistanceRewardShaping ? 1 : 0;
-    read_int(" Use distance reward shaping (0/1)", &shaping_int, shaping_int); // <-- novo
+    read_int(" Use distance reward shaping (0/1)", &shaping_int, shaping_int);
     *out_useDistanceRewardShaping = (shaping_int != 0);
+
+	int transpassing_int = *block_transspassing_walls ? 1 : 0;
+    read_int(" Block wall transpassing (0/1)", &transpassing_int, transpassing_int); 
+    *block_transspassing_walls = (transpassing_int != 0);
+
 }
 
 int main(int argc, char** argv){
@@ -368,7 +382,9 @@ int main(int argc, char** argv){
 	int sucess_window_size = SUCCESS_WINDOW;
 	float sucess_treshold = SUCCESS_THRESHOLD;
 	DecayType current_decay_type = DECAY_TYPE_EXP;
+	
 	bool useDistanceRewardShaping = false;
+	bool blockTranspassingWalls = true;
 
 	read_cli_state(AGENT_CLI_STATE_FILE, &map_path, &lr, &dr, &eps_decay, &sucess_window_size, &sucess_treshold,&current_decay_type,&useDistanceRewardShaping);
 	if(map_path){
@@ -382,7 +398,8 @@ int main(int argc, char** argv){
 		printf("\nMaze: %s\n",map_path);
 
 		printf("learning rate = %.2f, discount factor = %.2f, epsilon decay = %.2e\n",lr, dr, eps_decay);
-			
+		printf("Distance reward shaping: %s\n",useDistanceRewardShaping ? "Yes" : "No");
+		printf("Block Walls Transpassing: %s\n",blockTranspassingWalls ? "Yes" : "No");
 		printf("decay type = %s\n",decayTypeToStr[current_decay_type]);
 		printf("sucess window size = %u, sucess treshold = %.2f\n",sucess_window_size,sucess_treshold);
         
@@ -410,7 +427,7 @@ int main(int argc, char** argv){
         			free(current_agent);
 					current_agent = NULL;
 				}
-				current_agent = run_training(&ir,map_path, lr, dr, eps_decay,sucess_window_size, sucess_treshold,current_decay_type,useDistanceRewardShaping);
+				current_agent = run_training(&ir,map_path, lr, dr, eps_decay,sucess_window_size, sucess_treshold,current_decay_type,useDistanceRewardShaping,blockTranspassingWalls);
 			} else {
 				printf("Select an valid map path\n");
 			}
@@ -454,7 +471,7 @@ int main(int argc, char** argv){
 			}
 			// TODO: ENHANCE THE SUGESTED SUGESTED DECAY FOR EXPONENCIAL DECAY
 			// suggested_decay_exp = 0.9999f;
-			prompt_training_params(suggested_decay_exp,suggested_decay_linear,&lr,&dr,&eps_decay,&sucess_window_size,&sucess_treshold,&current_decay_type,&useDistanceRewardShaping);
+			prompt_training_params(suggested_decay_exp,suggested_decay_linear,&lr,&dr,&eps_decay,&sucess_window_size,&sucess_treshold,&current_decay_type,&useDistanceRewardShaping,&blockTranspassingWalls);
 			save_cli_state(AGENT_CLI_STATE_FILE, map_path, lr, dr, eps_decay, sucess_window_size, sucess_treshold,current_decay_type,useDistanceRewardShaping);
 		}
 

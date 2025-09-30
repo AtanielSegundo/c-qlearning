@@ -62,14 +62,14 @@ static reward_t smallGridTypeToReward[] = {
 	[GRID_OPEN]        = 0.0f,
 	[GRID_WALL]        = -1.0f,
 	[GRID_AGENT_GOAL]  = 1.0f,
-	[GRID_AGENT_START] = 0.0f
+	[GRID_AGENT_START] = -0.1f
 };
 
 static reward_t bigGridTypeToReward[] = {
-	[GRID_OPEN]        = -0.1f,
+	[GRID_OPEN]        = 0.0,
 	[GRID_WALL]        = -10.0f,
-	[GRID_AGENT_GOAL]  = 100.0f,
-	[GRID_AGENT_START] = 0.0f
+	[GRID_AGENT_GOAL]  = 10.0f,
+	[GRID_AGENT_START] = -0.1f
 };
 
 typedef float(*decay_fn)(float,float);
