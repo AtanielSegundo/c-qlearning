@@ -358,12 +358,30 @@ int main(int argc, char const *argv[])
 
 			if (lockCameraToAgent) {
 				float wheel = GetMouseWheelMove();
+				Vector2 mPosition = GetMousePosition();
 				if (wheel != 0.0f) {
-					const float base = 1.25f;
+					const float base = 1.25f; 
 					float targetZ = render.zoom_alpha * powf(base, wheel);
 					targetZ = clampf(targetZ, 0.001f, 100.0f);
 					float smooth = 0.3f;
-					render.zoom_alpha += (targetZ - render.zoom_alpha) * smooth;
+					float new_zoom = render.zoom_alpha + (targetZ - render.zoom_alpha) * smooth;
+
+					// ponto da grade sob o mouse antes do zoom
+					float cell_px_before = render.cr_lenght > 0 ? (float)render.cr_lenght : 1.0f;
+					float gx = (mPosition.x - render.offset_x - render.mouse_offset_x) / (cell_px_before);
+
+					float gy = (mPosition.y - render.offset_y - render.mouse_offset_y) / (cell_px_before);
+
+					// atualiza zoom
+					render.zoom_alpha = new_zoom;
+					UpdateCellRectParams(&render, &ir);
+
+					// novo tamanho de célula
+					float cell_px_after = (float)render.cr_lenght;
+
+					// recalcula offset para manter o mesmo gx,gy sob o mouse
+					render.mouse_offset_x = mPosition.x - render.offset_x - gx * cell_px_after;
+					render.mouse_offset_y = mPosition.y - render.offset_y - gy * cell_px_after;
 				}
 
 				render.width = GetScreenWidth();

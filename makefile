@@ -44,7 +44,7 @@ build/agentViewer.exe: src/agentViewer.c libs/raygui.a includes/agent.h
 # Binário mazeEditor (GUI)
 # depende da biblioteca raygui
 # --------------------------------------------------------------------
-build/mazeEditor.exe: src/mazeEditor.c libs/raygui.a
+build/mazeEditor.exe: src/mazeEditor.c libs/raygui.a includes/mazeRender.h
 	@echo ">>> Building mazeEditor (GUI)"
 	gcc $< $(include_path) $(build_flags) -o $@ $(raylib) $(raygui) $(backend)
 

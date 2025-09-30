@@ -79,15 +79,32 @@ void renderMaze(MazeRenderCtx *r, MazeInternalRepr *ir, bool lockUpdates){
 	
 	float wheel = GetMouseWheelMove();
 	Vector2 mDelta = GetMouseDelta();
-		
+	Vector2 mPosition = GetMousePosition();
+
 	if (!lockUpdates && wheel != 0.0f) {
 		const float base = 1.25f; 
 		float targetZ = r->zoom_alpha * powf(base, wheel);
 		targetZ = clampf(targetZ, 0.001f, 100.0f);
 		float smooth = 0.3f;
-		r->zoom_alpha += (targetZ - r->zoom_alpha) * smooth;
-		// printf("%f\n",r->zoom_alpha);
-	}
+		float new_zoom = r->zoom_alpha + (targetZ - r->zoom_alpha) * smooth;
+
+		// ponto da grade sob o mouse antes do zoom
+		float cell_px_before = r->cr_lenght > 0 ? (float)r->cr_lenght : 1.0f;
+		float gx = (mPosition.x - r->offset_x - r->mouse_offset_x) / (cell_px_before);
+
+		float gy = (mPosition.y - r->offset_y - r->mouse_offset_y) / (cell_px_before);
+
+		// atualiza zoom
+		r->zoom_alpha = new_zoom;
+		UpdateCellRectParams(r, ir);
+
+		// novo tamanho de célula
+		float cell_px_after = (float)r->cr_lenght;
+
+		// recalcula offset para manter o mesmo gx,gy sob o mouse
+		r->mouse_offset_x = mPosition.x - r->offset_x - gx * cell_px_after;
+		r->mouse_offset_y = mPosition.y - r->offset_y - gy * cell_px_after;
+	}		
 	
 	UpdateCellRectParams(r,ir);
 	
