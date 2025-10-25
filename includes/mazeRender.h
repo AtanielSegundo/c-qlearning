@@ -155,9 +155,11 @@ CellId getMouseCell(MazeRenderCtx *r, MazeInternalRepr *ir){
     return (CellId){ row, col };
 }
 
-void updateMazeClickedCell(MazeRenderCtx *r, MazeInternalRepr *ir){
+// RETURN TRUE IF CLICK DETECTED ELSE FALSE
+bool updateMazeClickedCell(MazeRenderCtx *r, MazeInternalRepr *ir){
 	Vector2 dt = GetMouseDelta();
-	if(IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)){
+	bool mouse_clicked = IsMouseButtonPressed(MOUSE_BUTTON_RIGHT);
+	if(mouse_clicked){
 		CellId c = getMouseCell(r,ir);
 		if(c.row >= 0 && c.col >= 0){
 			GridCellType ct =  getCell(ir,c.row,c.col);
@@ -172,6 +174,7 @@ void updateMazeClickedCell(MazeRenderCtx *r, MazeInternalRepr *ir){
 			
 		}
 	}
+	return mouse_clicked;
 }
 
 

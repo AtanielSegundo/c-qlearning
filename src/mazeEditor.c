@@ -25,6 +25,42 @@
 #define WINDOW_WIDTH  1280U
 #define WINDOW_HEIGTH  720U
 
+#define STATE_FILE_PATH (".maze_editor_state")
+#define STATE_IR_PATH (".last_state_ir.maze")
+
+static void save_maze_editor_state(char* maze_path,
+								   MazeInternalRepr* ir){
+	FILE *f = fopen(STATE_FILE_PATH, "w");
+    if (!f) return;
+	
+	FILE *f_ir = fopen(STATE_IR_PATH,"w");
+	if (!f_ir) return;
+	
+	fprintf(f,"maze_path=%s\n",maze_path);
+	writeMazeRaw(STATE_IR_PATH,ir);
+
+	fclose(f);
+	fclose(f_ir);
+}
+
+static void load_maze_editor_state(char* maze_path, MazeInternalRepr* ir){
+	FILE *f = fopen(STATE_FILE_PATH, "r");
+    if (!f) return;
+	
+	FILE *f_ir = fopen(STATE_IR_PATH,"r");
+	if (!f_ir) return;
+
+	char line[1024];
+	while (fgets(line, sizeof(line), f)) {
+        if (sscanf(line, "maze_path=%511[^\n]", maze_path) == 1) continue;
+    }
+
+	readMazeRaw(STATE_IR_PATH,ir);
+
+	fclose(f);
+	fclose(f_ir);
+}
+
 int main(int argc, char** argv) {	
 	// ARGUMENT HANDLING
 	char maze_path[512] = {0};
@@ -40,6 +76,8 @@ int main(int argc, char** argv) {
 	MazeInternalRepr ir  = {0};
 	MazeRenderCtx render = {0};
 
+	load_maze_editor_state(maze_path,&ir);
+
 	MazeRenderCtxInit(&render);
 	
 	SetConfigFlags(FLAG_WINDOW_RESIZABLE);
@@ -51,7 +89,7 @@ int main(int argc, char** argv) {
 	GuiWindowFileDialogState fDialogCtx = InitGuiWindowFileDialog(GetWorkingDirectory());
 	GenerateFormState genMazeFormCtx = initGenerateFormState("random.maze",10,10);
 
-	bool lockMazeEditing   = false;
+	bool lockMazeEditing = false;
 	
     while (!WindowShouldClose())
     {
@@ -105,6 +143,7 @@ int main(int argc, char** argv) {
 					strcpy(maze_path, TextFormat("%s" PATH_SEPERATOR "%s", fDialogCtx.dirPathText, fDialogCtx.fileNameText));
 					if(isNumpy) readMazeNumpy(maze_path,&ir);
 					else if (isRawMaze) readMazeRaw(maze_path,&ir);
+					save_maze_editor_state(maze_path,&ir);		
 				}
             }
 
@@ -113,7 +152,9 @@ int main(int argc, char** argv) {
         }
 
 			
-		updateMazeClickedCell(&render,&ir);
+		if(updateMazeClickedCell(&render,&ir)){
+			save_maze_editor_state(maze_path,&ir);
+		}
 
 		// END
 
