@@ -218,12 +218,15 @@ Agent* run_training(MazeEnv* ir,const char* map_path, float lr, float dr, double
     int* success_history = calloc(sucess_window_size,sizeof(int));
     for(int i=0;i<sucess_window_size;i++) success_history[i]=0;
     int success_index = 0;
+	
+	size_t wallsCount = countAllMatchingCells(ir,GRID_WALL);
+	size_t opensCount = countAllMatchingCells(ir,GRID_OPEN);
 
 	if(useDistanceRewardShaping) {
 		cellId c = getFirstMatchingCell(ir,GRID_AGENT_GOAL);
 		goal_state.x = c.col; goal_state.y = c.row;
 		int32_t start_to_goal_distance = manhatan_distance(goal_state,agent->agent_start);
-		goal_reward = getCellReward(ir,GRID_AGENT_GOAL);
+		goal_reward = getCellReward(ir,GRID_AGENT_GOAL,wallsCount,opensCount);
 	}
 
     printf("Maze loaded: rows=%zu cols=%zu\n", ir->rows, ir->cols);
@@ -237,7 +240,7 @@ Agent* run_training(MazeEnv* ir,const char* map_path, float lr, float dr, double
         for(int step = 0; step < (int)MAX_STEPS_PER_EPISODE; step++){
             agentPolicy(agent,ir);
             state_t next = GetNextState(agent->current_s,agent->policy_action);
-            stepResult sr = stepIntoState(ir,next);
+            stepResult sr = stepIntoState(ir,next,wallsCount,opensCount);
 			
 			state_t trans_state;
 			
@@ -314,7 +317,7 @@ Agent* run_training(MazeEnv* ir,const char* map_path, float lr, float dr, double
     	    agentPolicy(agent,ir);
     	    state_t before = agent->current_s;
     	    state_t next = GetNextState(agent->current_s,agent->policy_action);
-    	    stepResult sr = stepIntoState(ir,next);
+    	    stepResult sr = stepIntoState(ir,next,wallsCount,opensCount);
     	    printf("(%u) (%u,%u) -> (%u,%u) %s\n",step,before.x,before.y,next.x,next.y,
     	        sr.isGoal ? "[GOAL TARGET]" : "");
     	    if(sr.terminal) break;

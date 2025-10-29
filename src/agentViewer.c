@@ -110,8 +110,8 @@ bool isAgentRunable(MazeInternalRepr* ir,Agent* agent){
 	}
 };
 
-void updateAgent(Agent* agent, MazeInternalRepr* ir, size_t* steps_taken, bool* isGoal){
-    if(!agent || !ir || !steps_taken || !isGoal) return;
+void updateAgent(Agent* agent, MazeInternalRepr* ir, size_t* steps_taken, bool* isGoal,size_t wallsCount,size_t opensCount){
+	if(!agent || !ir || !steps_taken || !isGoal) return;
 
     size_t MAX_STEPS_PER_EPISODE = agent->q_table.len_state_x * agent->q_table.len_state_y * agent->q_table.len_state_actions;
 
@@ -124,7 +124,7 @@ void updateAgent(Agent* agent, MazeInternalRepr* ir, size_t* steps_taken, bool* 
 
     agentPolicy(agent, ir);
     state_t next = GetNextState(agent->current_s, agent->policy_action);
-    stepResult sr = stepIntoState(ir, next);
+    stepResult sr = stepIntoState(ir, next, wallsCount, opensCount);
 	agent->accum_reward += sr.reward;
     *steps_taken = *steps_taken + 1;
 
@@ -190,6 +190,9 @@ int main(int argc, char const *argv[])
 	MazeRenderCtx render = {0};
 	Agent agent = {0};
 	
+	size_t wallsCount = 0U;
+	size_t opensCount = 0U;
+
 	char maze_path[512]  = {0};
 	char agent_path[512] = {0};
 	char save_popup_msg[256] = {0};
@@ -290,6 +293,10 @@ int main(int argc, char const *argv[])
 				lockMazeEditing = false;
 			
 			runAgent = !isAgentRunable(&ir,&agent) ? false : runAgent;
+			if(runAgent){
+				wallsCount = countAllMatchingCells(&ir,GRID_WALL);
+				opensCount = countAllMatchingCells(&ir,GRID_OPEN);
+			}
 			save_viewer_state(".agent_viewer_state", maze_path, agent_path, lockMazeEditing);
         }
 		
@@ -325,7 +332,7 @@ int main(int argc, char const *argv[])
 		if(runAgent){
 			double now = GetTime();
 			if(now - lastUpdate >= updateInterval){
-				updateAgent(&agent,&ir,&steps_taken,&isAgentGoal);
+				updateAgent(&agent,&ir,&steps_taken,&isAgentGoal,wallsCount,opensCount);
 				lastUpdate = now;
 				if (lockCameraToAgent) {
 					if (agent.current_s.x != prev_agent_pos.x || agent.current_s.y != prev_agent_pos.y) {

@@ -58,19 +58,26 @@ static action_delta_t actionToDeltaMap[] = {
 	[ACTION_DOWN]  = (action_delta_t){0,-1}
 }; 
 
-static reward_t smallGridTypeToReward[] = {
+static reward_t gridTypeToReward[] = {
 	[GRID_OPEN]        = 0.0f,
-	[GRID_WALL]        = -1.0f,
+	[GRID_WALL]        = -.5f,
 	[GRID_AGENT_GOAL]  = 1.0f,
 	[GRID_AGENT_START] = -0.1f
 };
 
-static reward_t bigGridTypeToReward[] = {
-	[GRID_OPEN]        = 0.0,
-	[GRID_WALL]        = -10.0f,
-	[GRID_AGENT_GOAL]  = 10.0f,
-	[GRID_AGENT_START] = -0.1f
-};
+// static reward_t smallGridTypeToReward[] = {
+// 	[GRID_OPEN]        = 0.0f,
+// 	[GRID_WALL]        = -1.0f,
+// 	[GRID_AGENT_GOAL]  = 1.0f,
+// 	[GRID_AGENT_START] = -0.1f
+// };
+
+// static reward_t bigGridTypeToReward[] = {
+// 	[GRID_OPEN]        = 0.0,
+// 	[GRID_WALL]        = -10.0f,
+// 	[GRID_AGENT_GOAL]  = 10.0f,
+// 	[GRID_AGENT_START] = -0.1f
+// };
 
 typedef float(*decay_fn)(float,float);
 
@@ -93,13 +100,26 @@ void agentEpsilonDecay(Agent* self,decay_fn fn);
 int agentSaveQtable(Agent* agent,char* save_path);
 int agentReadQtable(Agent* agent, const char* load_path);
 
-#define MAX_CELLS_IN_AXIS (50U)
-reward_t getCellReward(MazeEnv* env,GridCellType t){
-	bool isBig = (env->cols >= MAX_CELLS_IN_AXIS && env->rows >= MAX_CELLS_IN_AXIS);
-	return isBig ? bigGridTypeToReward[t] : smallGridTypeToReward[t];
+// #define MAX_CELLS_IN_AXIS (50U)
+// reward_t getCellReward(MazeEnv* env,GridCellType t){
+// 	bool isBig = (env->cols >= MAX_CELLS_IN_AXIS && env->rows >= MAX_CELLS_IN_AXIS);
+// 	return isBig ? bigGridTypeToReward[t] : smallGridTypeToReward[t];
+// };
+
+reward_t getCellReward(MazeEnv* env,GridCellType t, size_t wallsCount, size_t opensCount){
+	reward_t normalized_r = gridTypeToReward[t];
+	reward_t scaled_r = 0.0f;
+	switch (t)
+	{
+		case GRID_OPEN: scaled_r = opensCount*normalized_r; break;
+		case GRID_WALL: scaled_r = wallsCount*normalized_r; break;
+		default: scaled_r = normalized_r; break;
+	}
+
+	return normalized_r;
 };
 
-stepResult stepIntoState(MazeEnv* e,state_t s);
+stepResult stepIntoState(MazeEnv* e,state_t s,size_t wallsCount, size_t opensCount);
 
 q_val_t getQtableValue(Agent* self,state_t s,Action a);
 void setQtableValue(Agent* self,state_t s,Action a, q_val_t q);
@@ -109,17 +129,17 @@ ValAction qtableMaxValAction(Agent* a,state_t s);
 
 #ifdef AGENT_IMPLEMENTATION
 
-stepResult stepIntoState(MazeEnv* e,state_t s){
+stepResult stepIntoState(MazeEnv* e,state_t s,size_t wallsCount, size_t opensCount){
 	stepResult sr = {0};
 	if (s.x >= e->cols || s.y >= e->rows || s.x < 0 || s.y < 0) {
 		sr.isGoal = false;
 		// sr.terminal default is false
-		sr.reward = getCellReward(e,GRID_WALL);
+		sr.reward = getCellReward(e,GRID_WALL,wallsCount,opensCount);
 	} else {
 		GridCellType cell_type = (GridCellType)getCell(e,s.y,s.x);
 		sr.isGoal   = (cell_type == GRID_AGENT_GOAL);
 		sr.terminal = sr.isGoal;
-		sr.reward 	= getCellReward(e,cell_type);
+		sr.reward 	= getCellReward(e,cell_type,wallsCount,opensCount);
 		sr.invalidNext = (cell_type == GRID_WALL);
 	}	
 	return sr;
