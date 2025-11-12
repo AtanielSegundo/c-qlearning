@@ -15,11 +15,14 @@
 #include <commdlg.h>
 #endif
 
+#include "csv.h"
+
 #define AGENT_IMPLEMENTATION
 #include "agent.h"
 
 #define MAZE_IR_IMPLEMENTATION
 #include "mazeIR.h"
+
 
 #define AGENT_CLI_STATE_FILE (".agent_cli_state")
 #define NEXT_BEST_RATE_INCREMENT (0.1f)
@@ -201,9 +204,37 @@ inline float manhatan_distance(state_t s1, state_t s2) {
 	return abs(s1.x - s2.x) + abs(s1.y - s2.y);
 }
 
-Agent* run_training(MazeEnv* ir,const char* map_path, float lr, float dr, double eps_decay,int sucess_window_size, float sucess_treshold, 
+#define da_append(xs, x)                                                             \
+    do {                                                                             \
+        if ((xs)->count >= (xs)->capacity) {                                         \
+            if ((xs)->capacity == 0) (xs)->capacity = 256;                           \
+            else (xs)->capacity *= 2;                                                \
+            (xs)->items = realloc((xs)->items, (xs)->capacity*sizeof(*(xs)->items)); \
+        }                                                                            \
+                                                                                     \
+        (xs)->items[(xs)->count++] = (x);                                            \
+    } while (0)
+
+typedef struct {
+	reward_t* items;
+	size_t count;
+	size_t capacity;
+} rewards_t;
+
+typedef struct
+{
+	rewards_t rewards_acumm_by_episode;
+	size_t last_episode;
+} trainMetrics;
+
+
+Agent* run_training(MazeEnv* ir,const char* map_path, 
+				  float lr, float dr, double eps_decay,
+				  int sucess_window_size, float sucess_treshold, 
 				  DecayType current_decay_type, 
-				  bool useDistanceRewardShaping, bool blockTranspassing) {
+				  bool useDistanceRewardShaping, bool blockTranspassing,
+				  trainMetrics* metrics
+				) {
 
 	bool stop_train = false;
 	char flag_char = '\0';
@@ -270,6 +301,8 @@ Agent* run_training(MazeEnv* ir,const char* map_path, float lr, float dr, double
             agentUpdateState(agent,trans_state);
         }
 
+		da_append(&metrics->rewards_acumm_by_episode,agent->accum_reward);
+
         success_history[success_index] = reached_goal ? 1 : 0;
         success_index = (success_index + 1) % sucess_window_size;
 
@@ -306,6 +339,7 @@ Agent* run_training(MazeEnv* ir,const char* map_path, float lr, float dr, double
     }
 
     printf("Training finished after %zu episodes.\n", current_episode);
+	metrics->last_episode = current_episode;
 
     // Simula melhor trajetória (epsilon=0)
     if(!stop_train){
@@ -376,12 +410,15 @@ void prompt_training_params(double sugested_epsilon_decay_exp,double sugested_ep
 
 }
 
+static char temp_format_buf[512];
+
 int main(int argc, char** argv){
 	signal(SIGINT,handle_interrrupt);
     char *map_path = NULL;
     float lr = 0.6f, dr = 0.9f, eps_decay = 0.99;
 	MazeEnv ir = {0};
 	Agent* current_agent = NULL;
+	trainMetrics train_metrics = {0};
 	int sucess_window_size = SUCCESS_WINDOW;
 	float sucess_treshold = SUCCESS_THRESHOLD;
 	DecayType current_decay_type = DECAY_TYPE_EXP;
@@ -430,12 +467,16 @@ int main(int argc, char** argv){
         			free(current_agent);
 					current_agent = NULL;
 				}
-				current_agent = run_training(&ir,map_path, lr, dr, eps_decay,sucess_window_size, sucess_treshold,current_decay_type,useDistanceRewardShaping,blockTranspassingWalls);
+				train_metrics.last_episode = 0;
+				train_metrics.rewards_acumm_by_episode.count= 0;
+				current_agent = run_training(&ir,map_path, lr, dr, eps_decay,sucess_window_size, sucess_treshold,current_decay_type,useDistanceRewardShaping,blockTranspassingWalls,&train_metrics);
 			} else {
 				printf("Select an valid map path\n");
 			}
         } else if(choice == 4){
-			if(current_agent){
+			if(current_agent) {
+				sprintf(temp_format_buf,"metrics/%s_%u.csv",getFilepathBasename(map_path),train_metrics.last_episode);				
+				save_csv_reward_accum_by_episode(temp_format_buf,train_metrics.rewards_acumm_by_episode.items,train_metrics.last_episode);
 				char* save_path = windows_open_file_dialog(qtable_filter,NULL,true);
 				if(agentSaveQtable(current_agent,save_path) == 0){
 					printf("[INFO] Agent Q table Saved\n");
