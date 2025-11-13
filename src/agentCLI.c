@@ -475,8 +475,10 @@ int main(int argc, char** argv){
 			}
         } else if(choice == 4){
 			if(current_agent) {
-				sprintf(temp_format_buf,"metrics/%s_%u.csv",getFilepathBasename(map_path),train_metrics.last_episode);				
-				save_csv_reward_accum_by_episode(temp_format_buf,train_metrics.rewards_acumm_by_episode.items,train_metrics.last_episode);
+				Basename b = getFilepathBasename(map_path);
+				sprintf(temp_format_buf, "metrics/%s_%zu.csv", b.str, train_metrics.last_episode);
+				save_csv_reward_accum_by_episode(temp_format_buf, train_metrics.rewards_acumm_by_episode.items, train_metrics.last_episode);
+				freeBasename(&b);
 				char* save_path = windows_open_file_dialog(qtable_filter,NULL,true);
 				if(agentSaveQtable(current_agent,save_path) == 0){
 					printf("[INFO] Agent Q table Saved\n");
