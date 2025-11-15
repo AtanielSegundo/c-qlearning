@@ -110,19 +110,21 @@ bool isAgentRunable(MazeInternalRepr* ir,Agent* agent){
 	}
 };
 
-void updateAgent(Agent* agent, MazeInternalRepr* ir, size_t* steps_taken, bool* isGoal,size_t wallsCount,size_t opensCount){
+void updateAgent(Agent* agent, MazeInternalRepr* ir, size_t* steps_taken, bool* isGoal,size_t wallsCount,size_t opensCount, q_val_t* accum_q_val){
 	if(!agent || !ir || !steps_taken || !isGoal) return;
 
     size_t MAX_STEPS_PER_EPISODE = agent->q_table.len_state_x * agent->q_table.len_state_y * agent->q_table.len_state_actions;
 
     if(*isGoal || *steps_taken > MAX_STEPS_PER_EPISODE){
-        agentRestart(agent);
+		agentRestart(agent);
+		*accum_q_val = 0;
         *steps_taken = 0;
         *isGoal = false;
         return;
     }
 
     agentPolicy(agent, ir);
+	*accum_q_val += getQtableValue(agent,agent->current_s,agent->policy_action);
     state_t next = GetNextState(agent->current_s, agent->policy_action);
     stepResult sr = stepIntoState(ir, next, wallsCount, opensCount);
 	
@@ -161,9 +163,10 @@ void renderAgent(Agent* agent, MazeRenderCtx* render){
     DrawCircle(center_x, center_y, radius, YELLOW);
 }
 
-void moveAgentToClickedCell(Agent* agent,MazeRenderCtx *r,MazeInternalRepr *ir,MouseButton mbtn){
+bool moveAgentToClickedCell(Agent* agent,MazeRenderCtx *r,MazeInternalRepr *ir,MouseButton mbtn){
 	Vector2 dt = GetMouseDelta();
-	if(IsMouseButtonPressed(mbtn)){
+	bool result = IsMouseButtonPressed(mbtn);
+	if(result){
 		CellId c = getMouseCell(r,ir);
 		if(c.row >= 0 && c.col >= 0){
 			agentRestart(agent);
@@ -171,6 +174,7 @@ void moveAgentToClickedCell(Agent* agent,MazeRenderCtx *r,MazeInternalRepr *ir,M
 			agent->current_s.y = c.row;
 		}
 	}
+	return result;
 }
 
 static void compute_camera_target_for_agent(MazeRenderCtx *render, MazeInternalRepr *ir, Agent *agent, int *out_tx, int *out_ty) {
@@ -337,7 +341,7 @@ int main(int argc, char const *argv[])
 			double now = GetTime();
 			if(now - lastUpdate >= updateInterval){
 				if(!(pauseWhenAgentOnGoal && isAgentGoal)){
-					updateAgent(&agent,&ir,&steps_taken,&isAgentGoal,wallsCount,opensCount);
+					updateAgent(&agent,&ir,&steps_taken,&isAgentGoal,wallsCount,opensCount,&accum_path_q_val);
 				}
 				lastUpdate = now;
 				if (lockCameraToAgent) {
@@ -359,7 +363,9 @@ int main(int argc, char const *argv[])
 				prev_agent_pos = agent.current_s;
 			}
 			
-			moveAgentToClickedCell(&agent,&render,&ir,MOUSE_BUTTON_RIGHT);
+			if (moveAgentToClickedCell(&agent,&render,&ir,MOUSE_BUTTON_RIGHT)){
+				accum_path_q_val = 0; 
+			}
 		}
 
 		if(IsKeyPressed(KEY_RIGHT)) updateInterval   = updateInterval / 2.0f;
@@ -462,9 +468,7 @@ int main(int argc, char const *argv[])
 
 			DrawText(TextFormat("Update Interval: %.3f s", updateInterval), info_x, info_y, LABEL_TEXT_SIZE, WHITE);
 			info_y += LABEL_TEXT_SIZE + 8;
-			DrawText(TextFormat("Cumulative Reward: %.3f", accum_path_q_val), info_x, info_y, LABEL_TEXT_SIZE, RED);
-			info_y += LABEL_TEXT_SIZE + 8;
-			DrawText(TextFormat("Cumulative Q-Val: %.3f", agent.accum_reward), info_x, info_y, LABEL_TEXT_SIZE, WHITE);
+			DrawText(TextFormat("Cumulative Q-Val: %.3f", accum_path_q_val), info_x, info_y, LABEL_TEXT_SIZE, WHITE);
 			info_y += LABEL_TEXT_SIZE + 32;
 
 			DrawText(TextFormat("Map: %s", GetFileName(maze_path)), info_x, info_y, LABEL_TEXT_SIZE, WHITE);
