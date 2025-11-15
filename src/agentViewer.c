@@ -34,6 +34,28 @@ typedef enum{
 } DIALOG_TARGET;
 
 
+#define da_append(xs, x)                                                             \
+    do {                                                                             \
+        if ((xs)->count >= (xs)->capacity) {                                         \
+            if ((xs)->capacity == 0) (xs)->capacity = 256;                           \
+            else (xs)->capacity *= 2;                                                \
+            (xs)->items = realloc((xs)->items, (xs)->capacity*sizeof(*(xs)->items)); \
+        }                                                                            \
+                                                                                     \
+        (xs)->items[(xs)->count++] = (x);                                            \
+    } while (0)
+
+typedef struct{
+	state_t s;
+	Action a;
+} agentStep;
+
+typedef struct {
+	agentStep* items;
+	size_t count;
+	size_t capacity;
+} agentSteps;
+
 void drawPopUpMsg(bool* save_popup_active,char* save_popup_msg){
 	GuiSetStyle(DEFAULT, TEXT_SIZE, 32);           
 	GuiSetStyle(BUTTON, TEXT_SIZE, 26);            
@@ -110,7 +132,11 @@ bool isAgentRunable(MazeInternalRepr* ir,Agent* agent){
 	}
 };
 
-void updateAgent(Agent* agent, MazeInternalRepr* ir, size_t* steps_taken, bool* isGoal,size_t wallsCount,size_t opensCount, q_val_t* accum_q_val){
+void updateAgent(Agent* agent, MazeInternalRepr* ir, size_t* steps_taken, bool* isGoal,
+				 size_t wallsCount,size_t opensCount, q_val_t* accum_q_val,
+				 Action manual_chosed_action,
+				 bool track_agent_steps, agentSteps* agent_steps
+				){
 	if(!agent || !ir || !steps_taken || !isGoal) return;
 
     size_t MAX_STEPS_PER_EPISODE = agent->q_table.len_state_x * agent->q_table.len_state_y * agent->q_table.len_state_actions;
@@ -119,12 +145,20 @@ void updateAgent(Agent* agent, MazeInternalRepr* ir, size_t* steps_taken, bool* 
 		agentRestart(agent);
 		*accum_q_val = 0;
         *steps_taken = 0;
+		agent_steps->count = 0;
         *isGoal = false;
         return;
     }
 
-    agentPolicy(agent, ir);
+	if(manual_chosed_action == ACTION_NONE){
+		agentPolicy(agent, ir);
+	} else {
+		agent->policy_action = manual_chosed_action;
+	}
 	*accum_q_val += getQtableValue(agent,agent->current_s,agent->policy_action);
+	if(track_agent_steps){
+		da_append(agent_steps,((agentStep){.s=agent->current_s,.a=agent->policy_action}));
+	}
     state_t next = GetNextState(agent->current_s, agent->policy_action);
     stepResult sr = stepIntoState(ir, next, wallsCount, opensCount);
 	
@@ -198,14 +232,17 @@ int main(int argc, char const *argv[])
 	size_t wallsCount = 0U;
 	size_t opensCount = 0U;
 
-	char maze_path[512]      = {0};
-	char agent_path[512]     = {0};
-	char save_popup_msg[256] = {0};
-	
+	char       maze_path[512]      = {0};
+	char       agent_path[512]     = {0};
+	char       save_popup_msg[256] = {0};
+	agentSteps agent_steps         = {0};
+	Action manual_chosed_action    = ACTION_NONE; 
+
 	bool save_popup_active = false;
 	bool lockMazeEditing = false;
 	bool runAgent = false;
 	bool pauseWhenAgentOnGoal = false;
+	bool trackAgentSteps = false;
 	
 	bool lockCameraToAgent = false;
 	int prev_mouse_offset_x = 0;
@@ -335,14 +372,36 @@ int main(int argc, char const *argv[])
 				render.mouse_offset_y = prev_mouse_offset_y;
 			}
 		}
-		
+
+		if(IsKeyPressed(KEY_RIGHT)) updateInterval   = updateInterval / 2.0f;
+		if(IsKeyPressed(KEY_LEFT)) updateInterval    = updateInterval * 2.0f;
+		if(IsKeyPressed(KEY_P)) pauseWhenAgentOnGoal = !pauseWhenAgentOnGoal;
+		if(IsKeyPressed(KEY_T)) {
+			trackAgentSteps = !trackAgentSteps;
+			if(!trackAgentSteps) agent_steps.count = 0;
+		};
+		if(IsKeyPressed(KEY_W)){
+			manual_chosed_action = ACTION_DOWN;
+		} 
+		if(IsKeyPressed(KEY_A)){
+			manual_chosed_action = ACTION_LEFT;
+		} 
+		if(IsKeyPressed(KEY_S)){
+			manual_chosed_action = ACTION_UP;
+		} 
+		if(IsKeyPressed(KEY_D)){
+			manual_chosed_action = ACTION_RIGHT;
+		} 
 		
 		if(runAgent){
 			double now = GetTime();
-			if(now - lastUpdate >= updateInterval){
+			if(now - lastUpdate >= updateInterval || manual_chosed_action != ACTION_NONE){
 				if(!(pauseWhenAgentOnGoal && isAgentGoal)){
-					updateAgent(&agent,&ir,&steps_taken,&isAgentGoal,wallsCount,opensCount,&accum_path_q_val);
+					updateAgent(&agent,&ir,&steps_taken,&isAgentGoal,wallsCount,opensCount,&accum_path_q_val,
+								manual_chosed_action,&trackAgentSteps,&agent_steps
+					);
 				}
+				manual_chosed_action = ACTION_NONE;
 				lastUpdate = now;
 				if (lockCameraToAgent) {
 					if (agent.current_s.x != prev_agent_pos.x || agent.current_s.y != prev_agent_pos.y) {
@@ -364,13 +423,13 @@ int main(int argc, char const *argv[])
 			}
 			
 			if (moveAgentToClickedCell(&agent,&render,&ir,MOUSE_BUTTON_RIGHT)){
-				accum_path_q_val = 0; 
+				accum_path_q_val = 0;
+				agent_steps.count = 0; 
+				steps_taken = 0;
+				isAgentGoal = false;
 			}
 		}
 
-		if(IsKeyPressed(KEY_RIGHT)) updateInterval   = updateInterval / 2.0f;
-		if(IsKeyPressed(KEY_LEFT)) updateInterval    = updateInterval * 2.0f;
-		if(IsKeyPressed(KEY_P)) pauseWhenAgentOnGoal = !pauseWhenAgentOnGoal;
 		
 		// END		
 		
@@ -434,6 +493,93 @@ int main(int argc, char const *argv[])
 
 			if(runAgent) renderAgent(&agent,&render);
 			
+			if (trackAgentSteps){
+				const float arrow_pad_percent  = 0.1;
+				const float arrow_body_width_percent = 0.10;
+				const float arrow_head_width_percent = 0.35;
+				const float arrow_body_height_percent = 0.75;
+				const float arrow_head_height_percent = 1.0f - arrow_body_height_percent;
+
+				float arrow_total_height = render.cr_lenght * (1.0f - 2*arrow_pad_percent);
+				float arrow_body_height  = arrow_total_height * arrow_body_height_percent;
+				float arrow_head_height  = arrow_total_height * arrow_head_height_percent;
+				float arrow_body_width   = render.cr_lenght * arrow_body_width_percent;
+				float arrow_head_width   = render.cr_lenght * arrow_head_width_percent;
+
+				const Color arrow_color = BLACK;
+
+				for (size_t i = 0; i < agent_steps.count; i++)
+				{
+					state_t _s = agent_steps.items[i].s;	
+					Action act = agent_steps.items[i].a;
+					
+					Vector2 s_to_pixel_cords = mazeCellToPixel(&render,_s.y,_s.x);
+
+					if (act >= ACTION_N_ACTIONS) continue;
+
+					if (s_to_pixel_cords.x < 0.0f || s_to_pixel_cords.y < 0.0f) continue;
+					Vector2 center = {
+						s_to_pixel_cords.x + (float)render.cr_lenght * 0.5f,
+						s_to_pixel_cords.y + (float)render.cr_lenght * 0.5f
+					};
+
+					float ux = (float)actionToDeltaMap[act].dx;
+					float uy = (float)actionToDeltaMap[act].dy;
+					/* se ação for NONE, desenha nada */
+					if (ux == 0.0f && uy == 0.0f) continue;
+
+					float px = -uy;
+					float py = ux;
+
+					/* comprimentos / larguras já calculados acima */
+					float half_body_w = arrow_body_width * 0.5f;
+					float half_head_w = arrow_head_width * 0.5f;
+					float body_len = arrow_body_height;
+					float head_len = arrow_head_height;
+					float total_len = arrow_total_height;
+
+					/* posições: corpo começa na "cauda" do total e vai até a base da cabeça */
+					Vector2 body_start = {
+						center.x - ux * (total_len * 0.5f),
+						center.y - uy * (total_len * 0.5f)
+					};
+					Vector2 body_end = {
+						body_start.x + ux * body_len,
+						body_start.y + uy * body_len
+					};
+					
+					Vector2 neck = body_end;
+
+					Vector2 head_tip = {
+						neck.x + ux * (arrow_total_height * 0.25f),
+						neck.y + uy * (arrow_total_height * 0.25f)
+					};
+
+					Vector2 head_left = {
+						neck.x + px * half_head_w,
+						neck.y + py * half_head_w
+					};
+
+					Vector2 head_right = {
+						neck.x - px * half_head_w,
+						neck.y - py * half_head_w
+					};
+
+					/* quad do corpo (p1,p2,p3,p4) */
+					Vector2 p1 = { body_start.x + px * half_body_w, body_start.y + py * half_body_w };
+					Vector2 p2 = { body_end.x   + px * half_body_w, body_end.y   + py * half_body_w };
+					Vector2 p3 = { body_end.x   - px * half_body_w, body_end.y   - py * half_body_w };
+					Vector2 p4 = { body_start.x - px * half_body_w, body_start.y - py * half_body_w };
+
+					/* desenha corpo (dois triângulos para formar o quad) */
+					DrawTriangle(p1, p2, p3, arrow_color);
+					DrawTriangle(p1, p3, p4, arrow_color);
+	
+					/* desenha cabeça (triângulo) */
+					DrawTriangle(head_left, head_tip, head_right, arrow_color);
+				}
+			}
+
 			if (fDialogCtx.windowActive) 
 			GuiLock();
 			
@@ -469,6 +615,11 @@ int main(int argc, char const *argv[])
 			DrawText(TextFormat("Update Interval: %.3f s", updateInterval), info_x, info_y, LABEL_TEXT_SIZE, WHITE);
 			info_y += LABEL_TEXT_SIZE + 8;
 			DrawText(TextFormat("Cumulative Q-Val: %.3f", accum_path_q_val), info_x, info_y, LABEL_TEXT_SIZE, WHITE);
+			info_y += LABEL_TEXT_SIZE + 8;
+			DrawText(TextFormat("Steps Taken: %d", steps_taken), info_x, info_y, LABEL_TEXT_SIZE, WHITE);
+			info_y += LABEL_TEXT_SIZE + 8;
+			DrawText(TextFormat("Pause on goal: %s", pauseWhenAgentOnGoal ? "True" : "False"), info_x, info_y, LABEL_TEXT_SIZE, 
+								pauseWhenAgentOnGoal ? RED : GREEN);
 			info_y += LABEL_TEXT_SIZE + 32;
 
 			DrawText(TextFormat("Map: %s", GetFileName(maze_path)), info_x, info_y, LABEL_TEXT_SIZE, WHITE);

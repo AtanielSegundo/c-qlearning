@@ -177,6 +177,20 @@ bool updateMazeClickedCell(MazeRenderCtx *r, MazeInternalRepr *ir){
 	return mouse_clicked;
 }
 
+Vector2 mazeCellToPixel(MazeRenderCtx *r, size_t row, size_t col){
+    Vector2 out = { -1.0f, -1.0f };
+    if (!r) return out;
+
+    if (r->cr_lenght <= 0) return out;
+
+    float x0 = (float)r->offset_x + (float)r->mouse_offset_x;
+    float y0 = (float)r->offset_y + (float)r->mouse_offset_y;
+
+    out.x = x0 + (float)col * (float)r->cr_lenght;
+    out.y = y0 + (float)row * (float)r->cr_lenght;
+
+    return out;
+}
 
 #define MazeRenderCtxInit(r, ...) \
 		_MazeRenderCtxUpdate_((r),(MazeRenderCtx){.width=800,.heigth=450,.offset_x=0,.offset_y=0,.zoom_alpha=0.75f,.cr_lenght=0,.cr_outline=0,.mouse_offset_x=0,.mouse_offset_y=0,.cr_outline_percent=0.05f,__VA_ARGS__})
