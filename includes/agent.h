@@ -129,6 +129,7 @@ stepResult stepIntoState(MazeEnv* e,state_t s,size_t wallsCount, size_t opensCou
 		sr.isGoal = false;
 		// sr.terminal default is false
 		sr.reward = getCellReward(e,GRID_WALL,wallsCount,opensCount);
+        sr.invalidNext = true;
 	} else {
 		GridCellType cell_type = (GridCellType)getCell(e,s.y,s.x);
 		sr.isGoal   = (cell_type == GRID_AGENT_GOAL);
