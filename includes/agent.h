@@ -2,6 +2,7 @@
 
 #include "stdint.h"
 #include "mazeIR.h"
+#include <float.h>
 
 #define AGENT_H
 
@@ -59,10 +60,10 @@ static action_delta_t actionToDeltaMap[] = {
 }; 
 
 static reward_t gridTypeToReward[] = {
-	[GRID_OPEN]        = 0.0f,
+	[GRID_OPEN]        = -.01f,
 	[GRID_WALL]        = -.5f,
 	[GRID_AGENT_GOAL]  = 1.0f,
-	[GRID_AGENT_START] = -0.1f
+	[GRID_AGENT_START] = -.1f
 };
 
 // static reward_t smallGridTypeToReward[] = {
@@ -95,7 +96,7 @@ void agentSetSeed(Agent* self,unsigned int seed);
 void agentRestart(Agent* self);
 void agentPolicy(Agent* self,MazeEnv* env);
 void agentUpdateState(Agent* a, state_t new_state);
-void agentQtableUpdate(Agent* self,state_t next,stepResult sr);
+float agentQtableUpdate(Agent* self,state_t next,stepResult sr);
 void agentEpsilonDecay(Agent* self,decay_fn fn);
 int agentSaveQtable(Agent* agent,char* save_path);
 int agentReadQtable(Agent* agent, const char* load_path);
@@ -123,6 +124,12 @@ reward_t getCellReward(MazeEnv* env,GridCellType t, size_t wallsCount, size_t op
 	return scaled_r;
 };
 
+reward_t getCellRewardUnscaled(MazeEnv* env,GridCellType t, size_t wallsCount, size_t opensCount){
+	reward_t normalized_r = gridTypeToReward[t];
+	return normalized_r;
+};
+
+
 stepResult stepIntoState(MazeEnv* e,state_t s,size_t wallsCount, size_t opensCount){
 	stepResult sr = {0};
 	if (s.x >= e->cols || s.y >= e->rows || s.x < 0 || s.y < 0) {
@@ -139,6 +146,24 @@ stepResult stepIntoState(MazeEnv* e,state_t s,size_t wallsCount, size_t opensCou
 	}	
 	return sr;
 };
+
+stepResult stepIntoStateUnscaled(MazeEnv* e,state_t s,size_t wallsCount, size_t opensCount){
+	stepResult sr = {0};
+	if (s.x >= e->cols || s.y >= e->rows || s.x < 0 || s.y < 0) {
+		sr.isGoal = false;
+		// sr.terminal default is false
+		sr.reward = getCellRewardUnscaled(e,GRID_WALL,wallsCount,opensCount);
+        sr.invalidNext = true;
+	} else {
+		GridCellType cell_type = (GridCellType)getCell(e,s.y,s.x);
+		sr.isGoal   = (cell_type == GRID_AGENT_GOAL);
+		sr.terminal = sr.isGoal;
+		sr.reward 	= getCellRewardUnscaled(e,cell_type,wallsCount,opensCount);
+		sr.invalidNext = (cell_type == GRID_WALL);
+	}	
+	return sr;
+};
+
 
 void agentSetSeed(Agent* self,unsigned int seed){
 	self->seed = seed;
@@ -188,7 +213,7 @@ void setQtableValue(Agent* self,state_t s,Action a, q_val_t q){
 }
 
 ValAction qtableMaxValAction(Agent* a,state_t s){
-	float max_qval_t  = -INFINITY;
+	float max_qval_t  = -FLT_MAX;
 	Action max_action = ACTION_NONE; 
 	for(int i = 0; i < ACTION_N_ACTIONS; i++){
 		q_val_t q = getQtableValue(a,s,i);
@@ -231,8 +256,9 @@ void agentUpdateState(Agent* a, state_t new_state){
 	}
 };
 
-void agentQtableUpdate(Agent* self,state_t next,stepResult sr){
-	q_val_t old_q_trace = (1-self->learning_rate)*getQtableValue(self,self->current_s,self->policy_action);
+float agentQtableUpdate(Agent* self,state_t next,stepResult sr){
+	q_val_t old_q_val = getQtableValue(self,self->current_s,self->policy_action);
+    q_val_t old_q_trace = (1-self->learning_rate)*old_q_val;
 	q_val_t TD = 0.0;
 	if(sr.terminal == true){
 		TD = self->learning_rate*sr.reward;
@@ -242,6 +268,9 @@ void agentQtableUpdate(Agent* self,state_t next,stepResult sr){
 	}
 	q_val_t new_q = old_q_trace + TD;
 	setQtableValue(self,self->current_s,self->policy_action,new_q);
+
+    // Return TD error
+    return TD - self->learning_rate*old_q_val; 
 }
 
 float exp_epislon_decay(float epsilon,float decay){return epsilon*decay;}

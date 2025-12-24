@@ -112,7 +112,7 @@ int readMazeNumpy(char* file_path,MazeInternalRepr* m){
 	fread(&temp_string,sizeof(char),magic_len,f);
 
 	if (strncmp(magic_string,temp_string,magic_len) != 0){
-		perror("[ERRO] File Passed Is Not An Numpy Array");
+		printf("[ERROR] File Passed Is Not An Numpy Array\n");
         return -1;
 	}
 

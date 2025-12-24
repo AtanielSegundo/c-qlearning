@@ -8,6 +8,7 @@ debug_flags   := -Wall -pedantic -Wextra -O0 -g
 # Bibliotecas externas
 raylib  := -I libs/raylib/include -L libs/raylib/lib -lraylib -lgdi32 -lwinmm
 raygui  := -L libs/ -l:raygui.a
+argparse := libs/argparse/argparse.c -I libs/argparse 
 
 # Alvo padrão e backend
 target  ?= _release
@@ -23,7 +24,7 @@ endif
 # --------------------------------------------------------------------
 # Alvo principal: constrói tudo
 # --------------------------------------------------------------------
-build: build/agentCLI.exe build/mazeEditor.exe build/agentViewer.exe
+build: build/agentCLI.exe build/mazeEditor.exe	build/agentViewer.exe	build/agentTrain.exe
 
 # --------------------------------------------------------------------
 # Binário agentCLI (linha de comando)
@@ -31,6 +32,13 @@ build: build/agentCLI.exe build/mazeEditor.exe build/agentViewer.exe
 build/agentCLI.exe: src/agentCLI.c includes/agent.h
 	@echo ">>> Building agentCLI (linha de comando)"
 	gcc $< $(include_path) $(build_flags) -o $@ -lcomdlg32
+
+# --------------------------------------------------------------------
+# Binário agentTrain (Receive arguments in the command line and process)
+# --------------------------------------------------------------------
+build/agentTrain.exe: src/agentTrainer.c includes/agent.h
+	@echo ">>> Building agentTrain"
+	gcc $< $(argparse) $(include_path) $(build_flags) -o $@
 
 # --------------------------------------------------------------------
 # Binário agentViwer (GUI)
