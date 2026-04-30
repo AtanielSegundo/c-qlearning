@@ -155,6 +155,43 @@ static void drawPopup(AppContext* ctx) {
     setCustomStyle();
 }
 
+static void smoothToF_from_f(const float*  src, float* dst, size_t n, int win) {
+    if (!src || !dst || n == 0) return;
+    if (win < 1) win = 1;
+    for (size_t i = 0; i < n; i++) {
+        float sum = 0.0f;
+        for (int j = 0; j < win; j++) {
+            int idx = (int)i - j;
+            sum += (idx >= 0) ? src[idx] : 0.0f;
+        }
+        dst[i] = sum / (float)win;
+    }
+}
+static void smoothToF_from_d(const double* src, float* dst, size_t n, int win) {
+    if (!src || !dst || n == 0) return;
+    if (win < 1) win = 1;
+    for (size_t i = 0; i < n; i++) {
+        double sum = 0.0;
+        for (int j = 0; j < win; j++) {
+            int idx = (int)i - j;
+            sum += (idx >= 0) ? src[idx] : 0.0;
+        }
+        dst[i] = (float)(sum / (double)win);
+    }
+}
+static void smoothToF_from_z(const size_t* src, float* dst, size_t n, int win) {
+    if (!src || !dst || n == 0) return;
+    if (win < 1) win = 1;
+    for (size_t i = 0; i < n; i++) {
+        double sum = 0.0;
+        for (int j = 0; j < win; j++) {
+            int idx = (int)i - j;
+            sum += (idx >= 0) ? (double)src[idx] : 0.0;
+        }
+        dst[i] = (float)(sum / (double)win);
+    }
+}
+
 static void drawLineGraphF(Rectangle r, const float* vals, size_t n,
                            const char* title, Color col)
 {
@@ -318,6 +355,7 @@ static void renderTrackedArrows(const agentSteps* steps, const MazeRenderCtx* re
 /* ------------------------------------------------------------------ */
 static void trainFreeMetrics(TrainState* t) {
     if (!t->allocated) return;
+    int epf = t->episodes_per_frame; 
     free(t->rewards);
     free(t->success_rate);
     free(t->loss);
@@ -325,7 +363,7 @@ static void trainFreeMetrics(TrainState* t) {
     free(t->cum_goals);
     free(t->goal_reached);
     memset(t, 0, sizeof(*t));
-    t->episodes_per_frame = 5;
+    t->episodes_per_frame = epf > 0 ? epf : 5;
 }
 
 static bool trainAllocMetrics(TrainState* t, size_t n) {
@@ -342,7 +380,6 @@ static bool trainAllocMetrics(TrainState* t, size_t n) {
         return false;
     }
     t->allocated = true;
-    t->episodes_per_frame = 5;
     return true;
 }
 
@@ -969,7 +1006,6 @@ static void runTrainer(AppContext* ctx) {
         ctx->max_steps    = (size_t)(ms > 0 ? ms : 1);
     }
 
-    /* metric panels */
     int gx = 20, gy = top_h + 20;
     int gw = (sw - 60) / 2;
     int gh = (sh - top_h - 60) / 2;
@@ -981,10 +1017,30 @@ static void runTrainer(AppContext* ctx) {
 
     size_t n = g_train.cur_episode;
 
-    drawLineGraphF(rR, g_train.allocated ? g_train.rewards      : NULL, n, "Reward / episode",     SKYBLUE);
-    drawLineGraphD(rS, g_train.allocated ? g_train.success_rate : NULL, n, "Success rate (%) [rolling]", LIME);
-    drawLineGraphD(rL, g_train.allocated ? g_train.loss         : NULL, n, "Huber loss / episode", RED);
-    drawLineGraphZ(rT, g_train.allocated ? g_train.steps        : NULL, n, "Steps / episode",      ORANGE);
+    /* smooth every series with a zero-padded trailing window whose length
+     * is g_train.episodes_per_frame (reuses the speed knob as a bias knob) */
+    {
+        static float sm_R[8192], sm_S[8192], sm_L[8192], sm_T[8192];
+        int   win  = g_train.episodes_per_frame > 0 ? g_train.episodes_per_frame : 1;
+        size_t take = n > 8192 ? 8192 : n;
+        size_t skip = n - take;
+
+        if (g_train.allocated && take > 0) {
+            smoothToF_from_f(g_train.rewards      + skip, sm_R, take, win);
+            smoothToF_from_d(g_train.success_rate + skip, sm_S, take, win);
+            smoothToF_from_d(g_train.loss         + skip, sm_L, take, win);
+            smoothToF_from_z(g_train.steps        + skip, sm_T, take, win);
+            drawLineGraphF(rR, sm_R, take, "Reward / episode",            SKYBLUE);
+            drawLineGraphF(rS, sm_S, take, "Success rate (%) [rolling]",  LIME);
+            drawLineGraphF(rL, sm_L, take, "Huber loss / episode",        RED);
+            drawLineGraphF(rT, sm_T, take, "Steps / episode",             ORANGE);
+        } else {
+            drawLineGraphF(rR, NULL, 0, "Reward / episode",           SKYBLUE);
+            drawLineGraphF(rS, NULL, 0, "Success rate (%) [rolling]", LIME);
+            drawLineGraphF(rL, NULL, 0, "Huber loss / episode",       RED);
+            drawLineGraphF(rT, NULL, 0, "Steps / episode",            ORANGE);
+        }
+    }
 
     if (g_train.done) {
         const char* msg = "Training complete";
