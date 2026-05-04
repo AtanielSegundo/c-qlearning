@@ -46,11 +46,11 @@ void saveDefaultStyle(void){
 
 void setCustomStyle(void){
 	saveDefaultStyle();
-	GuiSetStyle(DEFAULT, TEXT_SIZE, 26);           
-	GuiSetStyle(BUTTON, TEXT_SIZE, 26);            
-	GuiSetStyle(DEFAULT, TEXT_SPACING, 6);         
+	GuiSetStyle(DEFAULT, TEXT_SIZE, 26);
+	GuiSetStyle(BUTTON, TEXT_SIZE, 26);
+	GuiSetStyle(DEFAULT, TEXT_SPACING, 6);
 	GuiSetStyle(BUTTON, TEXT_ALIGNMENT, TEXT_ALIGN_CENTER);
-	GuiSetIconScale(2);                            	
+	GuiSetIconScale(2);
 }
 
 void setDefaultStyle(void){

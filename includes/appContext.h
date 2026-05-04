@@ -12,8 +12,8 @@
  * included by the translation unit, since mazeRender.h emits unguarded
  * function definitions that would multiply on a second inclusion. */
 
-#define APP_PATH_MAX        512
-#define APP_STATE_FILE      ".cqlearning_state"
+#define APP_PATH_MAX           512
+#define APP_STATE_FILE         ".cqlearning_state"
 #define APP_DEFAULT_EPISODES   200
 #define APP_DEFAULT_MAX_STEPS  1024
 #define APP_DEFAULT_LR         5e-4f

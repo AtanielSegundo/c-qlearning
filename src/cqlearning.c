@@ -193,7 +193,7 @@ static void smoothToF_from_z(const size_t* src, float* dst, size_t n, int win) {
 }
 
 static void drawLineGraphF(Rectangle r, const float* vals, size_t n,
-                           const char* title, Color col)
+                           const char* title, Color col, size_t x_offset)
 {
     DrawRectangleLines((int)r.x, (int)r.y, (int)r.width, (int)r.height, GRAY);
     DrawText(title, (int)r.x + 6, (int)r.y + 4, 14, RAYWHITE);
@@ -221,28 +221,64 @@ static void drawLineGraphF(Rectangle r, const float* vals, size_t n,
 
     DrawText(TextFormat("%.2f", maxv), (int)(r.x + r.width - 70), (int)(r.y + 4), 12, GRAY);
     DrawText(TextFormat("%.2f", minv), (int)(r.x + r.width - 70), (int)(r.y + r.height - 16), 12, GRAY);
+
+    /* hover tooltip — nearest sample under mouse x */
+    Vector2 mp = GetMousePosition();
+    if (CheckCollisionPointRec(mp, r)) {
+        float t = (mp.x - r.x - 6.0f) / ww;
+        if (t < 0.0f) t = 0.0f;
+        if (t > 1.0f) t = 1.0f;
+        size_t i = (size_t)(t * (float)(n - 1) + 0.5f);
+        if (i >= n) i = n - 1;
+
+        float t_i = (float)i / (float)(n - 1);
+        float v   = (vals[i] - minv) / (maxv - minv);
+        Vector2 sp = { r.x + 6 + t_i * ww, r.y + pad_top + (1.0f - v) * hh };
+
+        DrawLineEx((Vector2){ sp.x, r.y + pad_top },
+                   (Vector2){ sp.x, r.y + r.height - pad_bot },
+                   1.0f, Fade(RAYWHITE, 0.35f));
+        DrawCircleV(sp, 4.0f, RAYWHITE);
+        DrawCircleV(sp, 2.5f, col);
+
+        const int tip_font   = 22;
+        const int tip_pad_x  = 10;
+        const int tip_pad_y  = 6;
+        char buf[64];
+        snprintf(buf, sizeof(buf), "x=%zu  y=%.4g", i + x_offset, (double)vals[i]);
+        int tw = MeasureText(buf, tip_font);
+        int box_w = tw + tip_pad_x * 2;
+        int box_h = tip_font + tip_pad_y * 2;
+        int tx = (int)mp.x + 18;
+        int ty = (int)mp.y - box_h - 6;
+        if (tx + box_w > GetScreenWidth()) tx = (int)mp.x - box_w - 18;
+        if (ty < 0) ty = (int)mp.y + 24;
+        DrawRectangle(tx, ty, box_w, box_h, Fade(BLACK, 0.85f));
+        DrawRectangleLines(tx, ty, box_w, box_h, GRAY);
+        DrawText(buf, tx + tip_pad_x, ty + tip_pad_y, tip_font, RAYWHITE);
+    }
 }
 
 static void drawLineGraphD(Rectangle r, const double* vals, size_t n,
                            const char* title, Color col)
 {
-    if (n == 0) { drawLineGraphF(r, NULL, 0, title, col); return; }
+    if (n == 0) { drawLineGraphF(r, NULL, 0, title, col, 0); return; }
     static float buf[8192];
     size_t take = n > 8192 ? 8192 : n;
     size_t skip = n - take;
     for (size_t i = 0; i < take; i++) buf[i] = (float)vals[skip + i];
-    drawLineGraphF(r, buf, take, title, col);
+    drawLineGraphF(r, buf, take, title, col, skip);
 }
 
 static void drawLineGraphZ(Rectangle r, const size_t* vals, size_t n,
                            const char* title, Color col)
 {
-    if (n == 0) { drawLineGraphF(r, NULL, 0, title, col); return; }
+    if (n == 0) { drawLineGraphF(r, NULL, 0, title, col, 0); return; }
     static float buf[8192];
     size_t take = n > 8192 ? 8192 : n;
     size_t skip = n - take;
     for (size_t i = 0; i < take; i++) buf[i] = (float)vals[skip + i];
-    drawLineGraphF(r, buf, take, title, col);
+    drawLineGraphF(r, buf, take, title, col, skip);
 }
 
 static float huber(float x) {
@@ -527,21 +563,21 @@ static void drawMenu(AppContext* ctx) {
 
     int sw = GetScreenWidth(), sh = GetScreenHeight();
 
-    const char* title = "C-qlearning";
+    const char* title = "C-Qlearning";
     int titleSize = sh / 11; if (titleSize < 28) titleSize = 28;
     int tw = MeasureText(title, titleSize);
     int title_y = sh / 7;
     DrawText(title, (sw - tw) / 2, title_y, titleSize, RAYWHITE);
 
-    const char* subtitle = "maze Q-learning toolkit";
-    DrawText(subtitle, (sw - MeasureText(subtitle, 22)) / 2,
-             title_y + titleSize + 12, 22, GRAY);
+    // const char* subtitle = "maze Q-learning toolkit";
+    // DrawText(subtitle, (sw - MeasureText(subtitle, 22)) / 2,
+    //          title_y + titleSize + 12, 22, GRAY);
 
     int btnW = sw / 4; if (btnW < 280) btnW = 280; if (btnW > 460) btnW = 460;
     int btnH = sh / 12; if (btnH < 44) btnH = 44; if (btnH > 64) btnH = 64;
     int gap = 18;
     int x = (sw - btnW) / 2;
-    int y = sh / 3 + 30;
+    int y = sh / 4 + 30;
 
     if (GuiButton((Rectangle){x, y, btnW, btnH},
                   GuiIconText(ICON_FILE_NEW, "Maze Editor"))) {
@@ -657,6 +693,16 @@ static bool isAgentRunable(const MazeInternalRepr* ir, const Agent* a) {
         && ACTION_N_ACTIONS == a->q_table.len_state_actions;
 }
 
+static bool moveAgentToClickedCell(Agent* agent, MazeRenderCtx* r, MazeInternalRepr* ir, MouseButton mbtn) {
+    if (!IsMouseButtonPressed(mbtn)) return false;
+    CellId c = getMouseCell(r, ir);
+    if (c.row == (size_t)-1 || c.col == (size_t)-1) return false;
+    agentRestart(agent);
+    agent->current_s.x = (int32_t)c.col;
+    agent->current_s.y = (int32_t)c.row;
+    return true;
+}
+
 static void renderAgentDot(const Agent* a, const MazeRenderCtx* r) {
     int posx = (r->offset_x + r->mouse_offset_x) + a->current_s.x * r->cr_lenght;
     int posy = (r->offset_y + r->mouse_offset_y) + a->current_s.y * r->cr_lenght;
@@ -740,6 +786,30 @@ static void runViewer(AppContext* ctx) {
             g_view.cam_transition_active = false;
             ctx->render.mouse_offset_x = g_view.prev_mouse_offset_x;
             ctx->render.mouse_offset_y = g_view.prev_mouse_offset_y;
+        }
+    }
+
+    /* ---- right-click to teleport agent ---- */
+    if (g_view.running && !g_fdlg.windowActive && !ctx->popup_active) {
+        if (moveAgentToClickedCell(&ctx->agent, &ctx->render, &ctx->ir, MOUSE_BUTTON_RIGHT)) {
+            g_view.steps_taken       = 0;
+            g_view.is_goal           = false;
+            g_view.accum_q           = 0.0f;
+            g_view.agent_steps.count = 0;
+
+            if (g_view.lock_camera) {
+                g_view.cam_from_x = ctx->render.mouse_offset_x;
+                g_view.cam_from_y = ctx->render.mouse_offset_y;
+                ctx->render.width  = GetScreenWidth();
+                ctx->render.heigth = GetScreenHeight();
+                UpdateCellRectParams(&ctx->render, &ctx->ir);
+                compute_camera_target_for_agent(&ctx->render, &ctx->ir, &ctx->agent,
+                                                &g_view.cam_target_x, &g_view.cam_target_y);
+                g_view.cam_transition_duration = fmax(g_view.update_interval * 0.5, 0.05);
+                g_view.cam_transition_start    = GetTime();
+                g_view.cam_transition_active   = true;
+                g_view.prev_agent_pos = ctx->agent.current_s;
+            }
         }
     }
 
@@ -909,6 +979,17 @@ static void drawIntInput(Rectangle r, const char* label, int* val, bool* edit,
     }
 }
 
+static void drawFloatInput(Rectangle r, const char* label, float* val, bool* edit,
+                           char* buf, size_t buf_sz) {
+    DrawText(label, (int)r.x, (int)r.y - 26, 18, RAYWHITE);
+    if (!*edit) snprintf(buf, buf_sz, "%g", (double)*val);
+    if (GuiTextBox(r, buf, (int)buf_sz, *edit)) *edit = !*edit;
+    if (!*edit) {
+        float v = (float)atof(buf);
+        if (v >= 0.0f) *val = v;
+    }
+}
+
 static void runTrainer(AppContext* ctx) {
     /* drive training */
     if (g_train.running && !g_train.paused) {
@@ -972,7 +1053,6 @@ static void runTrainer(AppContext* ctx) {
 
     /* if button row wrapped, push remaining content down */
     int row_bottom = by + bh + 6;
-    top_h = row_bottom + 56;
 
     /* hyper-param strip */
     int hy = row_bottom;
@@ -984,16 +1064,50 @@ static void runTrainer(AppContext* ctx) {
                         g_train.cur_episode, ctx->num_episodes,
                         g_train.goals_count, ctx->agent.epsilon),
              10, hy + 22, 16, RAYWHITE);
+    DrawText(TextFormat("alpha=%.4f   gamma=%.4f   eps_decay=%.1f",
+                        (double)ctx->learning_rate,
+                        (double)ctx->discount_factor,
+                        (double)ctx->epsilon_decay),
+             10, hy + 44, 16, RAYWHITE);
 
     /* hyper-param controls — dock to the right side */
     static bool ed_ep = false, ed_st = false, ed_epf = false;
+    static bool ed_lr = false, ed_df = false, ed_ed = false;
     static char buf_ep[32], buf_st[32], buf_epf[32];
-    int field_w = 100, field_h = 28, field_gap = 140;
+    static char buf_lr[32], buf_df[32], buf_ed[32];
+
+    /* tweak these to resize the trainer metric input boxes */
+    const float field_w_mult     = 1.67f;
+    const float field_h_mult     = 1.0f;
+    const float field_gap_mult   = 1.67f;
+    const float row_spacing_mult = 1.0f;
+    const int   field_w_base     = 100;
+    const int   field_h_base     = 28;
+    const int   field_gap_base   = 140;
+    const int   row_spacing_base = 30;
+
+    int field_w     = (int)(field_w_base     * field_w_mult);
+    int field_h     = (int)(field_h_base     * field_h_mult);
+    int field_gap   = (int)(field_gap_base   * field_gap_mult);
+    int row_spacing = (int)(row_spacing_base * row_spacing_mult);
+
     int ixx = sw - 3 * field_gap - 10;
     if (ixx < 10) ixx = 10;
     int iyy = hy;
+    int iyy2 = iyy + field_h + row_spacing;
+
+    top_h = iyy2 + field_h + 16;
     int ne = (int)ctx->num_episodes;
     int ms = (int)ctx->max_steps;
+
+    /* trainer-only: white text inside the input boxes */
+    int saved_tc_normal  = GuiGetStyle(TEXTBOX, TEXT_COLOR_NORMAL);
+    int saved_tc_focused = GuiGetStyle(TEXTBOX, TEXT_COLOR_FOCUSED);
+    int saved_tc_pressed = GuiGetStyle(TEXTBOX, TEXT_COLOR_PRESSED);
+    GuiSetStyle(TEXTBOX, TEXT_COLOR_NORMAL,  ColorToInt(RAYWHITE));
+    GuiSetStyle(TEXTBOX, TEXT_COLOR_FOCUSED, ColorToInt(WHITE));
+    GuiSetStyle(TEXTBOX, TEXT_COLOR_PRESSED, ColorToInt(WHITE));
+
     drawIntInput((Rectangle){ixx,                  iyy, field_w, field_h}, "episodes",
                  &ne, &ed_ep, buf_ep, sizeof(buf_ep));
     drawIntInput((Rectangle){ixx + field_gap,      iyy, field_w, field_h}, "max_steps",
@@ -1001,6 +1115,20 @@ static void runTrainer(AppContext* ctx) {
     drawIntInput((Rectangle){ixx + 2 * field_gap,  iyy, field_w, field_h}, "ep/frame",
                  &g_train.episodes_per_frame, &ed_epf, buf_epf, sizeof(buf_epf));
     if (g_train.episodes_per_frame < 1) g_train.episodes_per_frame = 1;
+
+    if (g_train.running) GuiLock();
+    drawFloatInput((Rectangle){ixx,                 iyy2, field_w, field_h}, "alpha",
+                   &ctx->learning_rate,   &ed_lr, buf_lr, sizeof(buf_lr));
+    drawFloatInput((Rectangle){ixx + field_gap,     iyy2, field_w, field_h}, "gamma",
+                   &ctx->discount_factor, &ed_df, buf_df, sizeof(buf_df));
+    drawFloatInput((Rectangle){ixx + 2 * field_gap, iyy2, field_w, field_h}, "eps_decay",
+                   &ctx->epsilon_decay,   &ed_ed, buf_ed, sizeof(buf_ed));
+    if (g_train.running) GuiUnlock();
+
+    GuiSetStyle(TEXTBOX, TEXT_COLOR_NORMAL,  saved_tc_normal);
+    GuiSetStyle(TEXTBOX, TEXT_COLOR_FOCUSED, saved_tc_focused);
+    GuiSetStyle(TEXTBOX, TEXT_COLOR_PRESSED, saved_tc_pressed);
+
     if (!g_train.running) {
         ctx->num_episodes = (size_t)(ne > 0 ? ne : 1);
         ctx->max_steps    = (size_t)(ms > 0 ? ms : 1);
@@ -1030,15 +1158,15 @@ static void runTrainer(AppContext* ctx) {
             smoothToF_from_d(g_train.success_rate + skip, sm_S, take, win);
             smoothToF_from_d(g_train.loss         + skip, sm_L, take, win);
             smoothToF_from_z(g_train.steps        + skip, sm_T, take, win);
-            drawLineGraphF(rR, sm_R, take, "Reward / episode",            SKYBLUE);
-            drawLineGraphF(rS, sm_S, take, "Success rate (%) [rolling]",  LIME);
-            drawLineGraphF(rL, sm_L, take, "Huber loss / episode",        RED);
-            drawLineGraphF(rT, sm_T, take, "Steps / episode",             ORANGE);
+            drawLineGraphF(rR, sm_R, take, "Reward / episode",            SKYBLUE, skip);
+            drawLineGraphF(rS, sm_S, take, "Success rate (%) [rolling]",  LIME,    skip);
+            drawLineGraphF(rL, sm_L, take, "Huber loss / episode",        RED,     skip);
+            drawLineGraphF(rT, sm_T, take, "Steps / episode",             ORANGE,  skip);
         } else {
-            drawLineGraphF(rR, NULL, 0, "Reward / episode",           SKYBLUE);
-            drawLineGraphF(rS, NULL, 0, "Success rate (%) [rolling]", LIME);
-            drawLineGraphF(rL, NULL, 0, "Huber loss / episode",       RED);
-            drawLineGraphF(rT, NULL, 0, "Steps / episode",            ORANGE);
+            drawLineGraphF(rR, NULL, 0, "Reward / episode",           SKYBLUE, 0);
+            drawLineGraphF(rS, NULL, 0, "Success rate (%) [rolling]", LIME,    0);
+            drawLineGraphF(rL, NULL, 0, "Huber loss / episode",       RED,     0);
+            drawLineGraphF(rT, NULL, 0, "Steps / episode",            ORANGE,  0);
         }
     }
 
@@ -1138,6 +1266,7 @@ int main(int argc, char** argv) {
     g_fdlg    = InitGuiWindowFileDialog(GetWorkingDirectory());
     g_genForm = initGenerateFormState("random.maze", 10, 10);
 
+    
     while (!WindowShouldClose() && ctx.mode != (AppMode)-1) {
         BeginDrawing();
 

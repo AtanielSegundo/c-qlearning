@@ -21,10 +21,16 @@ else
 	build_flags = $(debug_flags)
 endif
 
+build: build/agentCLI.exe build/mazeEditor.exe	build/agentViewer.exe	build/agentTrain.exe build/Cqlearning.exe
+
 # --------------------------------------------------------------------
-# Alvo principal: constrói tudo
+# Binário cqlearning (GUI unificado: menu + editor + trainer + viewer)
+# depende da biblioteca raygui
 # --------------------------------------------------------------------
-build: build/agentCLI.exe build/mazeEditor.exe	build/agentViewer.exe	build/agentTrain.exe
+build/Cqlearning.exe: src/cqlearning.c libs/raygui.a includes/agent.h includes/appContext.h
+	@echo ">>> Building cqlearning (unified GUI)"
+	windres ./resources.rc -O coff -o ./resources.res
+	gcc $< ./resources.res $(include_path) $(build_flags) -o $@ $(raylib) $(raygui) $(backend)
 
 # --------------------------------------------------------------------
 # Binário agentCLI (linha de comando)
