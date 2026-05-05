@@ -4,9 +4,11 @@ A little Q-learning playground written in C, with a GUI built on raylib/raygui.
 
 You draw a maze, train an agent on it, and then watch the agent solve it. That's the whole idea.
 
+![Agent solving a maze](demo.gif)
+
 ## What's inside
 
-The unified app (`Cqlearning.exe`) has four modes:
+The unified app has four modes:
 
 - **Menu** — the entry screen.
 - **Maze Editor** — draw, generate, load and save mazes.
