@@ -42,4 +42,4 @@ make clean
 
 ## Why
 
-Mostly because writing reinforcement learning from scratch in C is a fun way to actually understand what Q-learning is doing — no PyTorch, no gym, just a table of numbers and a maze.
+Mostly because writing reinforcement learning from scratch in C is a fun way to actually understand what Q-learning is doing
